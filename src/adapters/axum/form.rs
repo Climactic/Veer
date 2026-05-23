@@ -10,7 +10,6 @@
 //! [`MultipartStream`] instead.
 
 use axum::{
-    async_trait,
     body::Body,
     extract::{rejection::FormRejection, rejection::JsonRejection, Form, FromRequest, Json},
     http::{header, Request, StatusCode},
@@ -30,7 +29,6 @@ use serde::de::DeserializeOwned;
 /// ```
 pub struct InertiaForm<T>(pub T);
 
-#[async_trait]
 impl<S, T> FromRequest<S> for InertiaForm<T>
 where
     S: Send + Sync,
@@ -199,7 +197,6 @@ impl IntoResponse for InertiaFormRejection {
 pub struct MultipartStream(pub axum::extract::Multipart);
 
 #[cfg(feature = "multipart")]
-#[async_trait]
 impl<S> FromRequest<S> for MultipartStream
 where
     S: Send + Sync,

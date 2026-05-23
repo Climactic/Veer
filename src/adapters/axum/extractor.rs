@@ -4,7 +4,7 @@ use crate::config::InertiaConfig;
 use crate::inertia::Inertia;
 use crate::request::RequestInfo;
 use crate::session::Flash;
-use axum::{async_trait, extract::FromRequestParts, http::request::Parts};
+use axum::{extract::FromRequestParts, http::request::Parts};
 use http::Extensions;
 use std::sync::Arc;
 
@@ -19,7 +19,6 @@ pub(crate) struct PerRequest {
     pub req_extensions: Arc<Extensions>,
 }
 
-#[async_trait]
 impl<S> FromRequestParts<S> for Inertia
 where
     S: Send + Sync,

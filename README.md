@@ -12,7 +12,7 @@ Build modern single-page apps in React, Vue, or Svelte — without writing a JSO
 [![Latest Version on crates.io](https://img.shields.io/crates/v/veer.svg?style=for-the-badge)](https://crates.io/crates/veer)
 [![GitHub CI Status](https://img.shields.io/github/actions/workflow/status/climactic/veer/ci.yml?branch=main&label=ci&style=for-the-badge)](https://github.com/climactic/veer/actions?query=workflow%3Aci+branch%3Amain)
 [![docs.rs](https://img.shields.io/docsrs/veer?style=for-the-badge)](https://docs.rs/veer)
-[![MSRV 1.75](https://img.shields.io/badge/MSRV-1.75-blue?style=for-the-badge)](https://www.rust-lang.org)
+[![MSRV 1.85](https://img.shields.io/badge/MSRV-1.85-blue?style=for-the-badge)](https://www.rust-lang.org)
 [![Sponsor on GitHub](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?style=for-the-badge&logo=github)](https://github.com/sponsors/climactic)
 [![Support on Ko-fi](https://img.shields.io/badge/Support-Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/ClimacticCo)
 

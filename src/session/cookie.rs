@@ -4,7 +4,7 @@ use super::{Flash, SessionStore};
 use async_trait::async_trait;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use cookie::Cookie;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use http::{header, request::Parts as RequestParts, Extensions, HeaderMap};
 use sha2::Sha256;
 use std::time::Duration;

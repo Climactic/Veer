@@ -36,6 +36,7 @@ impl<T: Serialize> Serialize for Merge<T> {
 #[cfg(feature = "ts")]
 impl<T: ts_rs::TS> ts_rs::TS for Merge<T> {
     type WithoutGenerics = <T as ts_rs::TS>::WithoutGenerics;
+    type OptionInnerType = <T as ts_rs::TS>::OptionInnerType;
     fn ident() -> String {
         <T as ts_rs::TS>::ident()
     }
@@ -66,7 +67,7 @@ impl<T: ts_rs::TS> ts_rs::TS for Merge<T> {
     fn decl_concrete() -> String {
         <T as ts_rs::TS>::decl_concrete()
     }
-    fn output_path() -> Option<&'static std::path::Path> {
+    fn output_path() -> Option<std::path::PathBuf> {
         <T as ts_rs::TS>::output_path()
     }
 }
