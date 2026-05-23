@@ -291,7 +291,7 @@ impl Split {
                     self.actions_dir, self.file_prefix, name, self.file_suffix
                 )
             };
-            let _ = writeln!(index, "export * as {} from \"{}\";", name, rel);
+            let _ = writeln!(index, "export * as {name} from \"{rel}\";");
         }
         std::fs::write(self.dir.join("index.ts"), index)?;
         Ok(())
@@ -341,11 +341,7 @@ fn render_prop_decls_and_pages() -> String {
     } else {
         let mut iter = pages.iter().peekable();
         while let Some((component, ts_name)) = iter.next() {
-            let _ = write!(
-                s,
-                "  | {{ component: {:?}; props: {} }}",
-                component, ts_name
-            );
+            let _ = write!(s, "  | {{ component: {component:?}; props: {ts_name} }}");
             if iter.peek().is_some() {
                 s.push('\n');
             } else {

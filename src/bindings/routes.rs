@@ -152,7 +152,7 @@ fn write_node(s: &mut String, node: &Node, depth: usize) {
         }
         s.push('\n');
     }
-    let _ = write!(s, "{}}}", pad);
+    let _ = write!(s, "{pad}}}");
 }
 
 /// Emit one leaf as `Object.assign(callable, { url, form })`.
@@ -164,7 +164,7 @@ fn write_leaf(s: &mut String, action: &Action, depth: usize) {
     s.push_str("Object.assign(\n");
 
     // Main callable: (params) => ({ url, method } as const)
-    let _ = write!(s, "{}", inner_pad);
+    let _ = write!(s, "{inner_pad}");
     write_arrow(s, &params, |s| {
         s.push_str("({ url: ");
         write_url_template(s, action.path, &params);
@@ -173,18 +173,18 @@ fn write_leaf(s: &mut String, action: &Action, depth: usize) {
     s.push_str(",\n");
 
     // Helper bag
-    let _ = writeln!(s, "{}{{", inner_pad);
+    let _ = writeln!(s, "{inner_pad}{{");
 
     // .url(params) → string
     let helper_pad = "  ".repeat(depth + 2);
-    let _ = write!(s, "{}url: ", helper_pad);
+    let _ = write!(s, "{helper_pad}url: ");
     write_arrow(s, &params, |s| {
         write_url_template(s, action.path, &params);
     });
     s.push_str(",\n");
 
     // .form(params) → { action, method } as const
-    let _ = write!(s, "{}form: ", helper_pad);
+    let _ = write!(s, "{helper_pad}form: ");
     write_arrow(s, &params, |s| {
         s.push_str("({ action: ");
         write_url_template(s, action.path, &params);
@@ -192,8 +192,8 @@ fn write_leaf(s: &mut String, action: &Action, depth: usize) {
     });
     s.push_str(",\n");
 
-    let _ = writeln!(s, "{}}},", inner_pad);
-    let _ = write!(s, "{})", pad);
+    let _ = writeln!(s, "{inner_pad}}},");
+    let _ = write!(s, "{pad})");
 }
 
 fn write_arrow<F: FnOnce(&mut String)>(s: &mut String, params: &[&str], body: F) {
@@ -205,7 +205,7 @@ fn write_arrow<F: FnOnce(&mut String)>(s: &mut String, params: &[&str], body: F)
             if i > 0 {
                 s.push_str("; ");
             }
-            let _ = write!(s, "{}: string | number", p);
+            let _ = write!(s, "{p}: string | number");
         }
         s.push_str(" }) => ");
     }
@@ -214,7 +214,7 @@ fn write_arrow<F: FnOnce(&mut String)>(s: &mut String, params: &[&str], body: F)
 
 fn write_url_template(s: &mut String, path: &str, params: &[&str]) {
     if params.is_empty() {
-        let _ = write!(s, "{:?}", path);
+        let _ = write!(s, "{path:?}");
         return;
     }
     s.push('`');
@@ -224,9 +224,9 @@ fn write_url_template(s: &mut String, path: &str, params: &[&str]) {
         }
         s.push('/');
         if let Some(name) = seg.strip_prefix(':') {
-            let _ = write!(s, "${{params.{}}}", name);
+            let _ = write!(s, "${{params.{name}}}");
         } else if let Some(name) = seg.strip_prefix('*') {
-            let _ = write!(s, "${{params.{}}}", name);
+            let _ = write!(s, "${{params.{name}}}");
         } else {
             s.push_str(seg);
         }
@@ -307,7 +307,7 @@ fn js_key(name: &str) -> String {
     if is_ident(name) && !JS_RESERVED.contains(&name) {
         name.to_string()
     } else {
-        format!("{:?}", name)
+        format!("{name:?}")
     }
 }
 
@@ -326,7 +326,7 @@ fn js_ident(name: &str) -> String {
             .collect()
     };
     if JS_RESERVED.contains(&base.as_str()) {
-        format!("{}_", base)
+        format!("{base}_")
     } else {
         base
     }
