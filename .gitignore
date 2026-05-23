@@ -13,6 +13,10 @@ dist/
 build/
 .cache/
 
+# ts-rs scratch output from `#[ts(export)]` auto-tests; the real bundle is
+# emitted as `inertia.gen.ts` via veer::bindings::generate().
+examples/**/bindings/
+
 # JS lockfiles (examples are not version-pinned)
 package-lock.json
 yarn.lock

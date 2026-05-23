@@ -1,11 +1,10 @@
 import { Link, router, usePage } from "@inertiajs/react";
 import Button from "../../components/Button";
 import Layout from "../../components/Layout";
-
-type Todo = { id: number; title: string; done: boolean };
+import { todos, type TodosIndexProps } from "../../gen";
 
 export default function Index() {
-  const { props } = usePage<{ todos: Todo[] }>();
+  const { props } = usePage<TodosIndexProps>();
 
   return (
     <Layout>
@@ -17,7 +16,7 @@ export default function Index() {
         }}
       >
         <h1>Todos</h1>
-        <Link href="/todos/new" className="btn btn-primary">
+        <Link href={todos.create.url()} className="btn btn-primary">
           New todo
         </Link>
       </div>
@@ -33,7 +32,7 @@ export default function Index() {
                 variant="danger"
                 onClick={() => {
                   if (confirm(`Delete "${t.title}"?`)) {
-                    router.delete(`/todos/${t.id}`);
+                    router.delete(todos.destroy.url({ id: Number(t.id) }));
                   }
                 }}
               >

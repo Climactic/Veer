@@ -20,6 +20,7 @@ tower-sessions = ["dep:tower-sessions"]
 multipart = ["axum", "axum?/multipart", "dep:base64", "dep:bytes"]
 validator = ["dep:validator"]
 garde = ["dep:garde"]
+ts = ["dep:ts-rs", "dep:inventory"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
@@ -50,6 +51,9 @@ tower-sessions = { version = "0.13", optional = true }
 
 validator = { version = "0.18", features = ["derive"], optional = true }
 garde = { version = "0.20", features = ["derive", "email"], optional = true }
+
+ts-rs = { version = "10", optional = true }
+inventory = { version = "0.3", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "io-util"] }

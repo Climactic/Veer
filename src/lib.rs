@@ -75,6 +75,17 @@ pub mod multipart;
 #[cfg(feature = "axum")]
 pub mod adapters;
 
+#[cfg(feature = "ts")]
+pub mod bindings;
+
+#[cfg(feature = "ts")]
+#[doc(hidden)]
+pub mod __private {
+    //! Re-exports used by `register_page!` / `inertia_route!`. Not stable.
+    pub use inventory;
+    pub use ts_rs;
+}
+
 pub use config::InertiaConfig;
 pub use error::VeerError;
 pub use inertia::Inertia;

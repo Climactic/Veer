@@ -2,6 +2,7 @@ import { Link, useForm } from "@inertiajs/react";
 import Button from "../../components/Button";
 import Field from "../../components/Field";
 import Layout from "../../components/Layout";
+import { todos } from "../../gen";
 
 export default function Create() {
   const form = useForm({ title: "" });
@@ -12,7 +13,7 @@ export default function Create() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          form.post("/todos");
+          form.post(todos.store.url());
         }}
       >
         <Field
@@ -27,7 +28,7 @@ export default function Create() {
           <Button type="submit" disabled={form.processing}>
             {form.processing ? "Saving…" : "Create"}
           </Button>
-          <Link href="/todos" className="btn btn-secondary">
+          <Link href={todos.index.url()} className="btn btn-secondary">
             Cancel
           </Link>
         </div>

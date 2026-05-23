@@ -1,13 +1,13 @@
-mod todos;
-
 use axum::{
     extract::{Path, State},
     routing::get,
     Router,
 };
+use axum_react_todo::todos::{
+    HomeProps, NewTodo, TodoStore, TodosCreateProps, TodosIndexProps,
+};
 use serde_json::json;
 use std::net::SocketAddr;
-use todos::{NewTodo, TodoStore};
 use validator::Validate;
 use veer::{
     session::cookie::CookieSessionStore, ssr::http::HttpSsrClient, Inertia, InertiaConfig,
@@ -73,18 +73,23 @@ async fn main() {
 }
 
 async fn home(inertia: Inertia) -> impl axum::response::IntoResponse {
-    inertia.render("home", json!({}))
+    inertia.render("home", HomeProps {})
 }
 
 async fn todos_index(
     inertia: Inertia,
     State(store): State<TodoStore>,
 ) -> impl axum::response::IntoResponse {
-    inertia.render("todos/index", json!({ "todos": store.all() }))
+    inertia.render(
+        "todos/index",
+        TodosIndexProps {
+            todos: store.all(),
+        },
+    )
 }
 
 async fn todos_new(inertia: Inertia) -> impl axum::response::IntoResponse {
-    inertia.render("todos/create", json!({}))
+    inertia.render("todos/create", TodosCreateProps {})
 }
 
 async fn todos_create(

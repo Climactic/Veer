@@ -32,3 +32,21 @@ impl<T: Serialize> Serialize for Merge<T> {
         map.end()
     }
 }
+
+#[cfg(feature = "ts")]
+impl<T: ts_rs::TS> ts_rs::TS for Merge<T> {
+    type WithoutGenerics = <T as ts_rs::TS>::WithoutGenerics;
+    fn ident() -> String { <T as ts_rs::TS>::ident() }
+    fn name() -> String { <T as ts_rs::TS>::name() }
+    fn inline() -> String { <T as ts_rs::TS>::inline() }
+    fn inline_flattened() -> String { <T as ts_rs::TS>::inline_flattened() }
+    fn visit_dependencies(v: &mut impl ts_rs::TypeVisitor) where Self: 'static {
+        <T as ts_rs::TS>::visit_dependencies(v);
+    }
+    fn visit_generics(v: &mut impl ts_rs::TypeVisitor) where Self: 'static {
+        <T as ts_rs::TS>::visit_generics(v);
+    }
+    fn decl() -> String { <T as ts_rs::TS>::decl() }
+    fn decl_concrete() -> String { <T as ts_rs::TS>::decl_concrete() }
+    fn output_path() -> Option<&'static std::path::Path> { <T as ts_rs::TS>::output_path() }
+}

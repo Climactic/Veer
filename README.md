@@ -63,6 +63,7 @@ Build modern single-page apps in React, Vue, or Svelte — without writing a JSO
 - ⚙️ Vite dev + production manifest integration that mirrors Laravel's `@vite`
 - 📤 File uploads via typed `InertiaForm` + a streaming `MultipartStream` extractor
 - ✅ Validation flash for `validator` and `garde`, plus a cookie-based session store
+- 🪢 End-to-end TypeScript bindings: typed page props + Ziggy-style route helpers, generated from Rust
 
 ## 📦 Installation
 
@@ -296,6 +297,128 @@ For SSR in production, build the sidecar with `vite build --ssr frontend/ssr.tsx
 </details>
 
 <details>
+<summary><b>End-to-end TypeScript bindings (Wayfinder-style)</b></summary>
+
+Enable the `ts` feature and the frontend gets an auto-generated `gen/` directory containing every page's props type, a discriminated `Pages` union, and one TypeScript module per controller with method-aware URL builders.
+
+```toml
+[dependencies]
+veer = { version = "0.1", features = ["ts"] }
+ts-rs = "10"
+```
+
+Annotate each prop struct, register it as a page, and declare your named routes (with their HTTP methods) at module scope:
+
+```rust,ignore
+use serde::Serialize;
+use ts_rs::TS;
+
+#[derive(Serialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub struct UsersIndexProps {
+    pub users: Vec<User>,
+}
+veer::register_page!(UsersIndexProps, "Users/Index");
+
+veer::register_routes! {
+    GET    "users.index"   => "/users",
+    GET    "users.show"    => "/users/:id",
+    GET    "users.create"  => "/users/new",
+    POST   "users.store"   => "/users",
+    PATCH  "users.update"  => "/users/:id",
+    DELETE "users.destroy" => "/users/:id",
+}
+```
+
+`ts-rs` mirrors `#[serde(rename_all)]` into the generated TypeScript, so the same struct drives both wire format and type. Route names follow the Laravel resource convention (`index`/`show`/`create`/`store`/`update`/`destroy`) so they don't collide with JavaScript reserved words.
+
+Add a tiny binary that emits the bundle. Drop this in `src/bin/gen-bindings.rs` inside your app crate — `cargo` auto-discovers it:
+
+```rust,ignore
+// src/bin/gen-bindings.rs
+fn main() {
+    veer::bindings::generate_split("./frontend/gen").unwrap();
+}
+```
+
+Generate with:
+
+```bash
+cargo run --bin gen-bindings
+```
+
+The codegen has to run inside *your* app binary (not a standalone CLI), because the route + page registrations are link-time `inventory` submissions that only exist in your compiled crate.
+
+On the frontend, import types and the per-controller action module:
+
+```tsx,ignore
+import { usePage, router, Link } from "@inertiajs/react";
+import { users, type UsersIndexProps } from "./gen";
+
+export default function Index() {
+  const { props } = usePage<UsersIndexProps>();
+  return (
+    <>
+      <Link href={users.create.url()}>New user</Link>
+      {props.users.map((u) => (
+        <Link key={u.id} href={users.show.url({ id: u.id })}>{u.name}</Link>
+      ))}
+    </>
+  );
+}
+```
+
+Each action is a callable with `.url` and `.form` helpers:
+
+| Call | Returns |
+|---|---|
+| `users.show({id: 1})` | `{ url: "/users/1", method: "get" } as const` (visit definition) |
+| `users.show.url({id: 1})` | `"/users/1"` (just the path string) |
+| `users.show.form({id: 1})` | `{ action: "/users/1", method: "get" } as const` (props for `<form>`) |
+
+Generated layout:
+
+```text
+frontend/gen/
+  index.ts              protocol types, Pages, prop types, action namespace re-exports
+  actions/
+    users.ts            export const index, show, create, store, update, destroy
+    posts.ts            …
+    _root.ts            routes without a dotted prefix
+```
+
+`Always<T>` and `Merge<T>` collapse to `T` on the TypeScript side — the protocol's `mergeProps` / `deferredProps` arrays in the envelope carry the marker information instead.
+
+**Customize the output layout** with the `Split` builder — rename the `actions/` subdirectory, add a filename prefix/suffix, or flatten everything into the root:
+
+```rust,ignore
+veer::bindings::Split::new("./frontend/gen")
+    .actions_dir("controllers")    // -> frontend/gen/controllers/
+    .file_suffix("-controller")    // -> users-controller.ts, posts-controller.ts
+    .generate()?;
+```
+
+`actions_dir("")` writes the controller files directly alongside `index.ts`; `file_prefix` is similarly available.
+
+**Need a single bundled file** instead of the split tree? Use [`bindings::generate("./frontend/inertia.gen.ts")`](https://docs.rs/veer/latest/veer/bindings/fn.generate.html) — same content, one file, with the route tree exposed as a nested `routes.users.show(...)` namespace.
+
+**Auto-regenerate on commit** with [lefthook](https://github.com/evilmartians/lefthook). Add this to `lefthook.yml` at the repo root:
+
+```yaml
+pre-commit:
+  commands:
+    veer-bindings:
+      glob: "*.rs"
+      run: cargo run -q --bin gen-bindings
+      stage_fixed: true
+```
+
+`stage_fixed: true` re-adds the regenerated TS files to the commit so they never drift from the Rust source. Run `lefthook install` once per dev machine. Pair with a CI job that runs `cargo run --bin gen-bindings && git diff --exit-code` on PRs to fail-fast if someone bypasses the hook.
+
+</details>
+
+<details>
 <summary><b>Cookie-based flash session</b></summary>
 
 For apps without an existing session crate:
@@ -347,6 +470,7 @@ Flash is stored under a single key (`_veer_flash` by default; override with `Tow
 | `tower-sessions` | off | Flash store backed by [`tower-sessions`](https://crates.io/crates/tower-sessions) |
 | `validator` | off | `IntoErrorBag` impl for `validator::ValidationErrors` |
 | `garde` | off | `IntoErrorBag` impl for `garde::Report` |
+| `ts` | off | End-to-end TypeScript bindings codegen (`ts-rs` + `inventory`) |
 
 Disabling a feature drops its transitive deps entirely.
 
@@ -408,7 +532,7 @@ bun dev
 `veer` is pre-1.0. The v0.1 protocol surface is complete (all Inertia v3 features: partial reloads, deferred props, merge props, encrypted/clear history, SSR, asset versioning, validation flash). Planned for follow-ups:
 
 - Adapters for `actix-web` and `rocket`
-- Optional proc-macro derive for typed prop wrappers
+- Typed route-param inference (today: `string | number`; goal: read each handler's `Path` extractor and emit the matching TS type)
 
 Contributions, bug reports, and protocol-conformance fixtures welcome.
 

@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
+use ts_rs::TS;
 use validator::Validate;
 
-#[derive(Clone, Serialize, Debug)]
+#[derive(Clone, Serialize, Debug, TS)]
+#[ts(export)]
 pub struct Todo {
     pub id: u64,
     pub title: String,
@@ -45,4 +47,29 @@ impl TodoStore {
             false
         }
     }
+}
+
+#[derive(Serialize, TS)]
+#[ts(export)]
+pub struct HomeProps {}
+veer::register_page!(HomeProps, "home");
+
+#[derive(Serialize, TS)]
+#[ts(export)]
+pub struct TodosIndexProps {
+    pub todos: Vec<Todo>,
+}
+veer::register_page!(TodosIndexProps, "todos/index");
+
+#[derive(Serialize, TS)]
+#[ts(export)]
+pub struct TodosCreateProps {}
+veer::register_page!(TodosCreateProps, "todos/create");
+
+veer::register_routes! {
+    GET    "home"           => "/",
+    GET    "todos.index"    => "/todos",
+    POST   "todos.store"    => "/todos",
+    GET    "todos.create"   => "/todos/new",
+    DELETE "todos.destroy"  => "/todos/:id",
 }

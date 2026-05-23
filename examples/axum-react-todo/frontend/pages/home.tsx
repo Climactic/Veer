@@ -1,5 +1,6 @@
 import { Link } from "@inertiajs/react";
 import Layout from "../components/Layout";
+import { todos } from "../gen";
 
 export default function Home() {
   return (
@@ -11,7 +12,7 @@ export default function Home() {
         proxies XHRs through.
       </p>
       <p>
-        <Link href="/todos">View todos →</Link>
+        <Link href={todos.index.url()}>View todos →</Link>
       </p>
     </Layout>
   );
