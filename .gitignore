@@ -1,0 +1,28 @@
+docs/superpowers/
+
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock
+
+# Node / examples
+node_modules/
+dist/
+.vite/
+.turbo/
+build/
+.cache/
+
+# JS lockfiles (examples are not version-pinned)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+bun.lockb
+bun.lock
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo

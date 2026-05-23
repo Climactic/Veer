@@ -1,0 +1,23 @@
+{
+  "name": "axum-react-todo",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:ssr": "vite build --ssr frontend/ssr.tsx --outDir dist/ssr",
+    "ssr:dev": "bun frontend/ssr.tsx"
+  },
+  "dependencies": {
+    "@inertiajs/react": "^3.1.1",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.13"
+  }
+}

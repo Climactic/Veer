@@ -1,0 +1,38 @@
+set shell := ["bash", "-cu"]
+
+# Default: run the full dev stack.
+default: dev
+
+# Run Vite (:5173) and the Rust backend (:3000) in parallel.
+#
+# - Default (CSR): open http://localhost:5173. Vite owns the browser.
+# - With SSR=1: also launches the Bun SSR sidecar on :13714. Open
+#   http://localhost:3000 — Rust is the HTML origin.
+#
+# Ctrl-C kills everything.
+dev:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [ -d node_modules ] || bun install
+    trap 'kill 0' SIGINT SIGTERM EXIT
+    bun dev &
+    if [ "${SSR:-}" = "1" ]; then
+      bun run ssr:dev &
+    fi
+    SSR="${SSR:-}" cargo run &
+    wait
+
+# Build the production frontend bundle into dist/.
+build:
+    bun install
+    bun run build
+
+# Build the production SSR sidecar bundle into dist/ssr/.
+build-ssr:
+    bun install
+    bun run build:ssr
+
+# Remove generated files and cached deps.
+clean:
+    rm -rf node_modules dist .vite
+    cargo clean

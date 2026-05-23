@@ -1,0 +1,123 @@
+{
+  "cases": [
+    {
+      "name": "initial-html",
+      "request": { "method": "GET", "uri": "/", "headers": {} },
+      "expect": {
+        "status": 200,
+        "content_type_starts_with": "text/html",
+        "body_contains": "data-page="
+      }
+    },
+    {
+      "name": "xhr-json-200",
+      "request": {
+        "method": "GET",
+        "uri": "/",
+        "headers": { "x-inertia": "true", "x-inertia-version": "v1" }
+      },
+      "expect": {
+        "status": 200,
+        "content_type": "application/json",
+        "x_inertia": "true",
+        "vary": "X-Inertia"
+      }
+    },
+    {
+      "name": "version-mismatch-on-get-returns-409",
+      "request": {
+        "method": "GET",
+        "uri": "/users",
+        "headers": { "x-inertia": "true", "x-inertia-version": "stale" }
+      },
+      "expect": {
+        "status": 409,
+        "x_inertia_location": "/users"
+      }
+    },
+    {
+      "name": "post-internal-redirect-is-303",
+      "request": {
+        "method": "POST",
+        "uri": "/users",
+        "headers": { "x-inertia": "true", "x-inertia-version": "v1" }
+      },
+      "expect": {
+        "status": 303,
+        "location": "/users/new"
+      }
+    },
+    {
+      "name": "external-redirect-via-location-returns-409",
+      "request": {
+        "method": "GET",
+        "uri": "/oauth",
+        "headers": {}
+      },
+      "expect": {
+        "status": 409,
+        "x_inertia_location": "https://example.com/oauth"
+      }
+    },
+    {
+      "name": "partial-reload-only-stats",
+      "request": {
+        "method": "GET",
+        "uri": "/with-lazy",
+        "headers": {
+          "x-inertia": "true",
+          "x-inertia-version": "v1",
+          "x-inertia-partial-component": "WithLazy",
+          "x-inertia-partial-data": "stats"
+        }
+      },
+      "expect": {
+        "status": 200,
+        "content_type": "application/json",
+        "body_contains_all": ["\"stats\"", "\"hits\":99"],
+        "body_excludes": ["\"users\""]
+      }
+    },
+    {
+      "name": "deferred-first-pass-advertises-group",
+      "request": {
+        "method": "GET",
+        "uri": "/dashboard",
+        "headers": {
+          "x-inertia": "true",
+          "x-inertia-version": "v1"
+        }
+      },
+      "expect": {
+        "status": 200,
+        "content_type": "application/json",
+        "body_contains_all": [
+          "\"deferredProps\"",
+          "\"metrics\"",
+          "\"stats\"",
+          "\"summary\":\"ok\""
+        ],
+        "body_excludes": ["\"hits\":7"]
+      }
+    },
+    {
+      "name": "deferred-second-pass-resolves-value",
+      "request": {
+        "method": "GET",
+        "uri": "/dashboard",
+        "headers": {
+          "x-inertia": "true",
+          "x-inertia-version": "v1",
+          "x-inertia-partial-component": "Dashboard",
+          "x-inertia-partial-data": "stats"
+        }
+      },
+      "expect": {
+        "status": 200,
+        "content_type": "application/json",
+        "body_contains_all": ["\"stats\"", "\"hits\":7"],
+        "body_excludes": ["\"deferredProps\""]
+      }
+    }
+  ]
+}
