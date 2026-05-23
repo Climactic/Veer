@@ -1,13 +1,11 @@
 //! Named-route registry and Wayfinder-style TS codegen.
 //!
-//! Apps register named routes via [`register_route!`](crate::register_route)
-//! or [`register_routes!`](crate::register_routes). Each entry carries an
-//! HTTP method, a dotted name, and an axum path pattern. The bindings
-//! generator turns the registry into a per-controller TS module (or a
-//! single-bundle namespace tree, depending on which generate function is
-//! used).
+//! Routes are recorded into a runtime registry by [`veer::Router::named_route`](crate::Router::named_route)
+//! when the router is built. The bindings generator turns the registry into
+//! a per-controller TS module (or a single-bundle namespace tree, depending
+//! on which `generate` function is called).
 //!
-//! Output shape per route — each "leaf" is a callable enriched (via
+//! Output shape per route — each leaf is a callable enriched (via
 //! `Object.assign`) with helper properties:
 //!
 //! ```ts
@@ -15,14 +13,21 @@
 //! show.url(params)    // → "/users/1"                          (string)
 //! show.form(params)   // → { action: "/users/1", method: "get" } (form props)
 //! ```
+//!
+//! Because the registry is populated at runtime, any process that builds
+//! the router (your main binary, your `gen-bindings` binary, an integration
+//! test) populates it before calling `generate*`.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
+use std::sync::{Mutex, OnceLock};
 
-/// A named route submitted into the inventory.
+/// A named route in the runtime registry.
 ///
-/// Built by the [`register_route!`](crate::register_route) /
-/// [`register_routes!`](crate::register_routes) macros; rarely constructed by hand.
+/// You don't normally construct this yourself —
+/// [`veer::Router::named_route`](crate::Router::named_route) pushes one per
+/// call.
+#[derive(Debug, Clone)]
 pub struct RouteEntry {
     /// Dotted name (e.g. `"users.show"`). The first segment becomes the
     /// controller (module / namespace); the remainder is the action.
@@ -33,78 +38,31 @@ pub struct RouteEntry {
     pub method: &'static str,
 }
 
-inventory::collect!(RouteEntry);
+static REGISTRY: OnceLock<Mutex<Vec<RouteEntry>>> = OnceLock::new();
 
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __method_str {
-    (GET)     => { "get" };
-    (POST)    => { "post" };
-    (PUT)     => { "put" };
-    (PATCH)   => { "patch" };
-    (DELETE)  => { "delete" };
-    (HEAD)    => { "head" };
-    (OPTIONS) => { "options" };
+fn registry() -> &'static Mutex<Vec<RouteEntry>> {
+    REGISTRY.get_or_init(|| Mutex::new(Vec::new()))
 }
 
-/// Register a single named route at module scope.
-///
-/// The macro expands to an `inventory::submit!` block (item-level) so it
-/// must appear at module scope, not inside a function. Mount the actual
-/// axum handler the usual way (`Router::route(path, get(handler))`); this
-/// registration only feeds the TS bindings generator.
-///
-/// # Examples
-/// ```ignore
-/// // Wayfinder-style: HTTP method is part of the definition.
-/// veer::register_route!(GET    "users.show" => "/users/:id");
-/// veer::register_route!(POST   "users.store" => "/users");
-/// veer::register_route!(DELETE "users.destroy" => "/users/:id");
-///
-/// // Back-compat: no method = GET.
-/// veer::register_route!("users.index", "/users");
-/// ```
-#[macro_export]
-macro_rules! register_route {
-    ($method:ident $name:literal => $path:literal) => {
-        $crate::__private::inventory::submit! {
-            $crate::bindings::RouteEntry {
-                name: $name,
-                path: $path,
-                method: $crate::__method_str!($method),
-            }
-        }
-    };
-    ($name:literal, $path:literal) => {
-        $crate::register_route!(GET $name => $path);
-    };
+/// Push a named route into the runtime registry. Called by
+/// [`veer::Router::build`](crate::Router::build) for every `.named_route()`
+/// invocation it has accumulated.
+pub fn register_runtime_route(name: &'static str, path: &'static str, method: &'static str) {
+    let mut lock = registry().lock().expect("route registry poisoned");
+    lock.push(RouteEntry {
+        name,
+        path,
+        method,
+    });
 }
 
-/// Register many named routes in a single block at module scope.
-///
-/// # Example
-/// ```ignore
-/// veer::register_routes! {
-///     GET    "users.index"   => "/users",
-///     GET    "users.show"    => "/users/:id",
-///     POST   "users.store"   => "/users",
-///     PATCH  "users.update"  => "/users/:id",
-///     DELETE "users.destroy" => "/users/:id",
-/// }
-/// ```
-///
-/// The bare `"name" => "/path"` form (no method keyword) still works and
-/// defaults to GET, for migration from earlier versions.
-#[macro_export]
-macro_rules! register_routes {
-    // Wayfinder-style: each entry is `METHOD "name" => "/path"`.
-    ( $( $method:ident $name:literal => $path:literal ),* $(,)? ) => {
-        $( $crate::register_route!($method $name => $path); )*
-    };
-    // Back-compat: each entry is `"name" => "/path"` (defaults to GET).
-    ( $( $name:literal => $path:literal ),* $(,)? ) => {
-        $( $crate::register_route!(GET $name => $path); )*
-    };
+/// Snapshot the currently-registered routes. Used by the bindings
+/// generator; consumers normally don't call this directly.
+pub fn registered_routes() -> Vec<RouteEntry> {
+    registry()
+        .lock()
+        .expect("route registry poisoned")
+        .clone()
 }
 
 /// One action in the routes tree.
@@ -122,7 +80,7 @@ struct Node {
 
 fn build_tree() -> Node {
     let mut root = Node::default();
-    for entry in inventory::iter::<RouteEntry>() {
+    for entry in registered_routes() {
         let mut node = &mut root;
         let segments: Vec<&str> = entry.name.split('.').collect();
         for (i, seg) in segments.iter().enumerate() {

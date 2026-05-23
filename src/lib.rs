@@ -99,7 +99,7 @@ pub use shared::SharedProps;
 pub use ssr::{SsrClient, SsrPayload};
 
 #[cfg(feature = "axum")]
-pub use adapters::axum::{InertiaForm, InertiaFormRejection, InertiaLayer};
+pub use adapters::axum::{InertiaForm, InertiaFormRejection, InertiaLayer, Method, Router};
 
 #[cfg(feature = "multipart")]
 pub use multipart::UploadedFile;

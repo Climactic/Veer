@@ -13,7 +13,7 @@ categories = ["web-programming", "web-programming::http-server"]
 
 [features]
 default = ["axum"]
-axum = ["dep:axum", "dep:tower", "dep:tower-layer", "dep:tower-service", "dep:http-body", "dep:http-body-util", "dep:bytes", "dep:pin-project-lite"]
+axum = ["dep:axum", "dep:indexmap", "dep:tower", "dep:tower-layer", "dep:tower-service", "dep:http-body", "dep:http-body-util", "dep:bytes", "dep:pin-project-lite"]
 ssr = ["dep:reqwest"]
 cookie-session = ["dep:cookie", "dep:hmac", "dep:sha2", "dep:base64", "dep:rand"]
 tower-sessions = ["dep:tower-sessions"]
@@ -31,6 +31,7 @@ tracing = "0.1"
 thiserror = "1.0"
 
 axum = { version = "0.7", optional = true }
+indexmap = { version = "2", optional = true }
 tower = { version = "0.5", optional = true }
 tower-layer = { version = "0.3", optional = true }
 tower-service = { version = "0.3", optional = true }

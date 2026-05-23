@@ -307,7 +307,7 @@ veer = { version = "0.1", features = ["ts"] }
 ts-rs = "10"
 ```
 
-Annotate each prop struct, register it as a page, and declare your named routes (with their HTTP methods) at module scope:
+Annotate each prop struct and register it as a page:
 
 ```rust,ignore
 use serde::Serialize;
@@ -320,24 +320,37 @@ pub struct UsersIndexProps {
     pub users: Vec<User>,
 }
 veer::register_page!(UsersIndexProps, "Users/Index");
-
-veer::register_routes! {
-    GET    "users.index"   => "/users",
-    GET    "users.show"    => "/users/:id",
-    GET    "users.create"  => "/users/new",
-    POST   "users.store"   => "/users",
-    PATCH  "users.update"  => "/users/:id",
-    DELETE "users.destroy" => "/users/:id",
-}
 ```
+
+Then build your router using `veer::Router` — same fluent API as `axum::Router`, but every route gets a name and method so the codegen knows about it:
+
+```rust,ignore
+use veer::Method::*;
+
+pub fn router() -> veer::Router<AppState> {
+    veer::Router::new()
+        .named_route(GET,    "users.index",   "/users",      users_index)
+        .named_route(GET,    "users.show",    "/users/:id",  users_show)
+        .named_route(GET,    "users.create",  "/users/new",  users_create)
+        .named_route(POST,   "users.store",   "/users",      users_store)
+        .named_route(PATCH,  "users.update",  "/users/:id",  users_update)
+        .named_route(DELETE, "users.destroy", "/users/:id",  users_destroy)
+}
+
+// In main():
+let app = router().build().with_state(state).layer(InertiaLayer::new(cfg));
+```
+
+`build()` returns a regular `axum::Router`, so `.with_state` / `.layer` / `.merge` / anything else just works. Same-path multi-method calls (GET + POST on `/users`) are merged into a single `MethodRouter` automatically — no panic on duplicate paths.
 
 `ts-rs` mirrors `#[serde(rename_all)]` into the generated TypeScript, so the same struct drives both wire format and type. Route names follow the Laravel resource convention (`index`/`show`/`create`/`store`/`update`/`destroy`) so they don't collide with JavaScript reserved words.
 
-Add a tiny binary that emits the bundle. Drop this in `src/bin/gen-bindings.rs` inside your app crate — `cargo` auto-discovers it:
+Add a tiny binary that builds the router (so the runtime route registry populates) and then emits the bundle. Drop this in `src/bin/gen-bindings.rs` inside your app crate — `cargo` auto-discovers it:
 
 ```rust,ignore
 // src/bin/gen-bindings.rs
 fn main() {
+    let _ = my_app::router().build();   // populate registry
     veer::bindings::generate_split("./frontend/gen").unwrap();
 }
 ```
@@ -348,7 +361,7 @@ Generate with:
 cargo run --bin gen-bindings
 ```
 
-The codegen has to run inside *your* app binary (not a standalone CLI), because the route + page registrations are link-time `inventory` submissions that only exist in your compiled crate.
+The codegen has to run inside *your* app binary (not a standalone CLI), because the route registry is populated at runtime by `Router::build()` and the page registrations are link-time `inventory` submissions — both only exist in your compiled crate.
 
 On the frontend, import types and the per-controller action module:
 

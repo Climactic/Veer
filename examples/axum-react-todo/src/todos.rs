@@ -65,11 +65,3 @@ veer::register_page!(TodosIndexProps, "todos/index");
 #[ts(export)]
 pub struct TodosCreateProps {}
 veer::register_page!(TodosCreateProps, "todos/create");
-
-veer::register_routes! {
-    GET    "home"           => "/",
-    GET    "todos.index"    => "/todos",
-    POST   "todos.store"    => "/todos",
-    GET    "todos.create"   => "/todos/new",
-    DELETE "todos.destroy"  => "/todos/:id",
-}

@@ -1,17 +1,8 @@
-use axum::{
-    extract::{Path, State},
-    routing::get,
-    Router,
-};
-use axum_react_todo::todos::{
-    HomeProps, NewTodo, TodoStore, TodosCreateProps, TodosIndexProps,
-};
-use serde_json::json;
+use axum_react_todo::{router, todos::TodoStore};
 use std::net::SocketAddr;
-use validator::Validate;
 use veer::{
-    session::cookie::CookieSessionStore, ssr::http::HttpSsrClient, Inertia, InertiaConfig,
-    InertiaForm, InertiaLayer, ViteRootView,
+    session::cookie::CookieSessionStore, ssr::http::HttpSsrClient, InertiaConfig, InertiaLayer,
+    ViteRootView,
 };
 
 #[tokio::main]
@@ -55,11 +46,8 @@ async fn main() {
         cfg = cfg.csr_only(true);
     }
 
-    let app: Router = Router::new()
-        .route("/", get(home))
-        .route("/todos", get(todos_index).post(todos_create))
-        .route("/todos/new", get(todos_new))
-        .route("/todos/:id", axum::routing::delete(todos_delete))
+    let app = router()
+        .build()
         .with_state(store)
         .layer(InertiaLayer::new(cfg));
 
@@ -70,51 +58,4 @@ async fn main() {
     );
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
-}
-
-async fn home(inertia: Inertia) -> impl axum::response::IntoResponse {
-    inertia.render("home", HomeProps {})
-}
-
-async fn todos_index(
-    inertia: Inertia,
-    State(store): State<TodoStore>,
-) -> impl axum::response::IntoResponse {
-    inertia.render(
-        "todos/index",
-        TodosIndexProps {
-            todos: store.all(),
-        },
-    )
-}
-
-async fn todos_new(inertia: Inertia) -> impl axum::response::IntoResponse {
-    inertia.render("todos/create", TodosCreateProps {})
-}
-
-async fn todos_create(
-    inertia: Inertia,
-    State(store): State<TodoStore>,
-    InertiaForm(body): InertiaForm<NewTodo>,
-) -> impl axum::response::IntoResponse {
-    if let Err(errors) = body.validate() {
-        return inertia.with_errors(errors).redirect("/todos/new");
-    }
-    store.add(body.title);
-    inertia
-        .redirect("/todos")
-        .with_flash("success", json!("Todo created"))
-}
-
-async fn todos_delete(
-    inertia: Inertia,
-    State(store): State<TodoStore>,
-    Path(id): Path<u64>,
-) -> impl axum::response::IntoResponse {
-    let msg = if store.delete(id) {
-        "Todo deleted"
-    } else {
-        "Todo not found"
-    };
-    inertia.redirect("/todos").with_flash("success", json!(msg))
 }
