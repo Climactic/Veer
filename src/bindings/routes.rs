@@ -173,7 +173,7 @@ fn write_leaf(s: &mut String, action: &Action, depth: usize) {
     s.push_str(",\n");
 
     // Helper bag
-    let _ = write!(s, "{}{{\n", inner_pad);
+    let _ = writeln!(s, "{}{{", inner_pad);
 
     // .url(params) → string
     let helper_pad = "  ".repeat(depth + 2);
@@ -192,7 +192,7 @@ fn write_leaf(s: &mut String, action: &Action, depth: usize) {
     });
     s.push_str(",\n");
 
-    let _ = write!(s, "{}}},\n", inner_pad);
+    let _ = writeln!(s, "{}}},", inner_pad);
     let _ = write!(s, "{})", pad);
 }
 
