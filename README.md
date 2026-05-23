@@ -10,7 +10,7 @@ Build modern single-page apps in React, Vue, or Svelte — without writing a JSO
 
 [![Discord](https://img.shields.io/badge/Discord-Join%20Us-5865F2?style=for-the-badge&logo=discord&logoColor=white)](http://go.climactic.co/discord)
 [![Latest Version on crates.io](https://img.shields.io/crates/v/veer.svg?style=for-the-badge)](https://crates.io/crates/veer)
-[![GitHub CI Status](https://img.shields.io/github/actions/workflow/status/climactic/rust-inertia/ci.yml?branch=main&label=ci&style=for-the-badge)](https://github.com/climactic/rust-inertia/actions?query=workflow%3Aci+branch%3Amain)
+[![GitHub CI Status](https://img.shields.io/github/actions/workflow/status/climactic/veer/ci.yml?branch=main&label=ci&style=for-the-badge)](https://github.com/climactic/veer/actions?query=workflow%3Aci+branch%3Amain)
 [![docs.rs](https://img.shields.io/docsrs/veer?style=for-the-badge)](https://docs.rs/veer)
 [![MSRV 1.75](https://img.shields.io/badge/MSRV-1.75-blue?style=for-the-badge)](https://www.rust-lang.org)
 [![Sponsor on GitHub](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?style=for-the-badge&logo=github)](https://github.com/sponsors/climactic)
@@ -594,11 +594,11 @@ Veer is free and open source, built and maintained with care. If this crate has 
 
 ## ⭐ Star History
 
-<a href="https://star-history.com/#climactic/rust-inertia&Date">
+<a href="https://star-history.com/#climactic/veer&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=climactic/rust-inertia&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=climactic/rust-inertia&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=climactic/rust-inertia&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=climactic/veer&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=climactic/veer&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=climactic/veer&type=Date" />
  </picture>
 </a>
 
