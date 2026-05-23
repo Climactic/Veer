@@ -111,9 +111,7 @@ inventory::collect!(PageEntry);
 ///
 /// This is part of the public surface only because proc-macro output needs
 /// to reference it; it isn't intended to be called by hand.
-pub fn collect_decls<T: ts_rs::TS + 'static + ?Sized>(
-    out: &mut HashMap<TypeId, (String, String)>,
-) {
+pub fn collect_decls<T: ts_rs::TS + 'static + ?Sized>(out: &mut HashMap<TypeId, (String, String)>) {
     let id = TypeId::of::<T>();
     if out.contains_key(&id) {
         return;

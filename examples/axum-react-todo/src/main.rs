@@ -26,11 +26,9 @@ async fn main() {
     //   `ViteManifest::load`).
     let ssr_mode = std::env::var("SSR").is_ok();
 
-    let mut cfg = InertiaConfig::new()
-        .version(|| "dev".into())
-        .session(
-            CookieSessionStore::new(b"01234567890123456789012345678901".to_vec()).secure(false),
-        );
+    let mut cfg = InertiaConfig::new().version(|| "dev".into()).session(
+        CookieSessionStore::new(b"01234567890123456789012345678901".to_vec()).secure(false),
+    );
     if ssr_mode {
         cfg = cfg
             .root_view(

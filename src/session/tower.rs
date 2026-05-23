@@ -154,9 +154,7 @@ mod tests {
 
         let mut flash = Flash::default();
         flash.errors.insert("email".into(), "invalid".into());
-        flash
-            .bags
-            .insert("success".into(), serde_json::json!("ok"));
+        flash.bags.insert("success".into(), serde_json::json!("ok"));
 
         let mut headers = HeaderMap::new();
         let mut exts = Extensions::new();
@@ -166,11 +164,11 @@ mod tests {
         // Same session handle on the next request — see what comes back.
         let parts = parts_with_session(session);
         let read = store.read_and_clear(&parts).await;
-        assert_eq!(read.errors.get("email").map(String::as_str), Some("invalid"));
         assert_eq!(
-            read.bags.get("success"),
-            Some(&serde_json::json!("ok"))
+            read.errors.get("email").map(String::as_str),
+            Some("invalid")
         );
+        assert_eq!(read.bags.get("success"), Some(&serde_json::json!("ok")));
 
         // One-shot: a second read returns nothing.
         let read_again = store.read_and_clear(&parts).await;
@@ -180,11 +178,7 @@ mod tests {
     #[tokio::test]
     async fn missing_session_yields_empty_flash() {
         let store = TowerSessionStore::new();
-        let req = Request::builder()
-            .method("GET")
-            .uri("/")
-            .body(())
-            .unwrap();
+        let req = Request::builder().method("GET").uri("/").body(()).unwrap();
         let parts = req.into_parts().0;
         assert!(store.read_and_clear(&parts).await.is_empty());
     }
@@ -201,5 +195,4 @@ mod tests {
         let parts = parts_with_session(session);
         assert!(store.read_and_clear(&parts).await.is_empty());
     }
-
 }

@@ -65,8 +65,8 @@ impl FromStr for ViteManifest {
 impl ViteManifest {
     /// Read and parse the manifest from `path`.
     pub fn load(path: impl AsRef<Path>) -> Result<Self, String> {
-        let bytes =
-            std::fs::read_to_string(path.as_ref()).map_err(|e| format!("vite manifest read: {e}"))?;
+        let bytes = std::fs::read_to_string(path.as_ref())
+            .map_err(|e| format!("vite manifest read: {e}"))?;
         bytes.parse()
     }
 
@@ -377,7 +377,9 @@ mod tests {
             .entry("frontend/app.tsx")
             .dev_server("http://localhost:5173");
         let html = v.render(ctx("{}", None)).unwrap();
-        assert!(html.contains(r#"<script type="module" src="http://localhost:5173/@vite/client"></script>"#));
+        assert!(html.contains(
+            r#"<script type="module" src="http://localhost:5173/@vite/client"></script>"#
+        ));
         assert!(html.contains(
             r#"<script type="module" src="http://localhost:5173/frontend/app.tsx"></script>"#
         ));
@@ -396,7 +398,9 @@ mod tests {
         assert!(html.contains("__vite_plugin_react_preamble_installed__"));
         assert!(html.contains("http://localhost:5173/@react-refresh"));
         // Preamble must come before the entry script (it has to run first).
-        let preamble_pos = html.find("__vite_plugin_react_preamble_installed__").unwrap();
+        let preamble_pos = html
+            .find("__vite_plugin_react_preamble_installed__")
+            .unwrap();
         let entry_pos = html.find("frontend/app.tsx").unwrap();
         assert!(preamble_pos < entry_pos);
     }
@@ -501,27 +505,19 @@ mod tests {
 
     #[test]
     fn manifest_hash_is_stable_and_change_sensitive() {
-        let a = ViteManifest::from_str(
-            r#"{"frontend/app.tsx": {"file": "assets/app-1.js"}}"#,
-        )
-        .unwrap();
-        let b = ViteManifest::from_str(
-            r#"{"frontend/app.tsx": {"file": "assets/app-1.js"}}"#,
-        )
-        .unwrap();
-        let c = ViteManifest::from_str(
-            r#"{"frontend/app.tsx": {"file": "assets/app-2.js"}}"#,
-        )
-        .unwrap();
+        let a =
+            ViteManifest::from_str(r#"{"frontend/app.tsx": {"file": "assets/app-1.js"}}"#).unwrap();
+        let b =
+            ViteManifest::from_str(r#"{"frontend/app.tsx": {"file": "assets/app-1.js"}}"#).unwrap();
+        let c =
+            ViteManifest::from_str(r#"{"frontend/app.tsx": {"file": "assets/app-2.js"}}"#).unwrap();
         assert_eq!(a.hash(), b.hash());
         assert_ne!(a.hash(), c.hash());
     }
 
     #[test]
     fn title_is_html_escaped() {
-        let v = ViteRootView::dev()
-            .title("<bad>")
-            .entry("frontend/app.tsx");
+        let v = ViteRootView::dev().title("<bad>").entry("frontend/app.tsx");
         let html = v.render(ctx("{}", None)).unwrap();
         assert!(html.contains("<title>&lt;bad&gt;</title>"));
     }

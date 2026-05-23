@@ -10,11 +10,11 @@ use veer::{Inertia, InertiaForm, Method::*};
 /// `src/bin/gen-bindings.rs` to populate the TS bindings registry.
 pub fn router() -> veer::Router<TodoStore> {
     veer::Router::new()
-        .named_route(GET,    "home",           "/",           home)
-        .named_route(GET,    "todos.index",    "/todos",      todos_index)
-        .named_route(POST,   "todos.store",    "/todos",      todos_create)
-        .named_route(GET,    "todos.create",   "/todos/new",  todos_new)
-        .named_route(DELETE, "todos.destroy",  "/todos/:id",  todos_delete)
+        .named_route(GET, "home", "/", home)
+        .named_route(GET, "todos.index", "/todos", todos_index)
+        .named_route(POST, "todos.store", "/todos", todos_create)
+        .named_route(GET, "todos.create", "/todos/new", todos_new)
+        .named_route(DELETE, "todos.destroy", "/todos/:id", todos_delete)
 }
 
 async fn home(inertia: Inertia) -> impl axum::response::IntoResponse {
@@ -25,12 +25,7 @@ async fn todos_index(
     inertia: Inertia,
     State(store): State<TodoStore>,
 ) -> impl axum::response::IntoResponse {
-    inertia.render(
-        "todos/index",
-        TodosIndexProps {
-            todos: store.all(),
-        },
-    )
+    inertia.render("todos/index", TodosIndexProps { todos: store.all() })
 }
 
 async fn todos_new(inertia: Inertia) -> impl axum::response::IntoResponse {

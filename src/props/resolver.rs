@@ -59,7 +59,12 @@ pub fn serialize_tag_aware<T: Serialize>(value: &T) -> Result<SerializedBase, se
     let mut always_paths = HashSet::new();
     let mut merge_paths = HashSet::new();
     let mut path = String::new();
-    strip_sentinels(&mut json_value, &mut path, &mut always_paths, &mut merge_paths);
+    strip_sentinels(
+        &mut json_value,
+        &mut path,
+        &mut always_paths,
+        &mut merge_paths,
+    );
     Ok(SerializedBase {
         value: json_value,
         always_paths,

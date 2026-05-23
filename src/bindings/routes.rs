@@ -49,20 +49,13 @@ fn registry() -> &'static Mutex<Vec<RouteEntry>> {
 /// invocation it has accumulated.
 pub fn register_runtime_route(name: &'static str, path: &'static str, method: &'static str) {
     let mut lock = registry().lock().expect("route registry poisoned");
-    lock.push(RouteEntry {
-        name,
-        path,
-        method,
-    });
+    lock.push(RouteEntry { name, path, method });
 }
 
 /// Snapshot the currently-registered routes. Used by the bindings
 /// generator; consumers normally don't call this directly.
 pub fn registered_routes() -> Vec<RouteEntry> {
-    registry()
-        .lock()
-        .expect("route registry poisoned")
-        .clone()
+    registry().lock().expect("route registry poisoned").clone()
 }
 
 /// One action in the routes tree.
@@ -260,13 +253,53 @@ fn is_ident(name: &str) -> bool {
 /// the generated TS — prefer Laravel-idiomatic names (`destroy`, `create`,
 /// `store`, `update`, `edit`, `show`, `index`) to avoid the rename.
 const JS_RESERVED: &[&str] = &[
-    "break", "case", "catch", "class", "const", "continue", "debugger",
-    "default", "delete", "do", "else", "enum", "export", "extends", "false",
-    "finally", "for", "function", "if", "import", "in", "instanceof", "new",
-    "null", "return", "super", "switch", "this", "throw", "true", "try",
-    "typeof", "var", "void", "while", "with", "yield", "let", "static",
-    "implements", "interface", "package", "private", "protected", "public",
-    "await", "async",
+    "break",
+    "case",
+    "catch",
+    "class",
+    "const",
+    "continue",
+    "debugger",
+    "default",
+    "delete",
+    "do",
+    "else",
+    "enum",
+    "export",
+    "extends",
+    "false",
+    "finally",
+    "for",
+    "function",
+    "if",
+    "import",
+    "in",
+    "instanceof",
+    "new",
+    "null",
+    "return",
+    "super",
+    "switch",
+    "this",
+    "throw",
+    "true",
+    "try",
+    "typeof",
+    "var",
+    "void",
+    "while",
+    "with",
+    "yield",
+    "let",
+    "static",
+    "implements",
+    "interface",
+    "package",
+    "private",
+    "protected",
+    "public",
+    "await",
+    "async",
 ];
 
 fn js_key(name: &str) -> String {
@@ -283,7 +316,13 @@ fn js_ident(name: &str) -> String {
         name.to_string()
     } else {
         name.chars()
-            .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect()
     };
     if JS_RESERVED.contains(&base.as_str()) {
