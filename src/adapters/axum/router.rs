@@ -97,6 +97,7 @@ pub struct Router<S = ()> {
     raw: Vec<RawRoute<S>>,
 }
 
+#[cfg_attr(not(feature = "ts"), allow(dead_code))]
 struct NamedRoute {
     name: &'static str,
     path: &'static str,
