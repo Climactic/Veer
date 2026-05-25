@@ -69,6 +69,9 @@ pub mod session;
 pub mod shared;
 pub mod ssr;
 
+#[cfg(feature = "csrf")]
+pub mod csrf;
+
 #[cfg(feature = "multipart")]
 pub mod multipart;
 
@@ -96,6 +99,8 @@ pub use response::InertiaResponse;
 pub use root_view::{MinimalRootView, RootView, RootViewContext, ViteManifest, ViteRootView};
 pub use session::{Flash, SessionStore};
 pub use shared::SharedProps;
+#[cfg(feature = "csrf")]
+pub use csrf::CsrfTokens;
 pub use ssr::{SsrClient, SsrPayload};
 
 #[cfg(feature = "axum")]
