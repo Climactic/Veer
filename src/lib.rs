@@ -106,6 +106,9 @@ pub use ssr::{SsrClient, SsrPayload};
 #[cfg(feature = "axum")]
 pub use adapters::axum::{InertiaForm, InertiaFormRejection, InertiaLayer, Method, Router};
 
+#[cfg(feature = "csrf")]
+pub use adapters::axum::CsrfLayer;
+
 #[cfg(feature = "multipart")]
 pub use multipart::UploadedFile;
 
