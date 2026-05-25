@@ -109,6 +109,9 @@ pub use adapters::axum::{InertiaForm, InertiaFormRejection, InertiaLayer, Method
 #[cfg(feature = "csrf")]
 pub use adapters::axum::CsrfLayer;
 
+#[cfg(feature = "embed")]
+pub use adapters::axum::EmbeddedAssets;
+
 #[cfg(feature = "multipart")]
 pub use multipart::UploadedFile;
 

@@ -9,12 +9,18 @@ pub mod router;
 #[cfg(feature = "csrf")]
 pub mod csrf;
 
+#[cfg(feature = "embed")]
+pub mod embed;
+
 pub use form::{InertiaForm, InertiaFormRejection};
 pub use layer::InertiaLayer;
 pub use router::{Method, Router};
 
 #[cfg(feature = "csrf")]
 pub use csrf::CsrfLayer;
+
+#[cfg(feature = "embed")]
+pub use embed::EmbeddedAssets;
 
 #[cfg(feature = "multipart")]
 pub use form::MultipartStream;
