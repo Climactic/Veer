@@ -20,7 +20,7 @@ tower-sessions = ["dep:tower-sessions"]
 multipart = ["axum", "axum?/multipart", "dep:base64", "dep:bytes"]
 validator = ["dep:validator"]
 garde = ["dep:garde"]
-csrf = ["axum", "dep:cookie", "dep:hmac", "dep:sha2", "dep:base64", "dep:getrandom"]
+csrf = ["axum", "dep:cookie", "dep:hmac", "dep:sha2", "dep:base64", "dep:getrandom", "dep:subtle"]
 embed = ["axum"]
 ts = ["dep:ts-rs", "dep:inventory"]
 
@@ -49,6 +49,7 @@ hmac = { version = "0.13", optional = true }
 sha2 = { version = "0.11", optional = true }
 base64 = { version = "0.22", optional = true }
 getrandom = { version = "0.3", optional = true }
+subtle = { version = "2", optional = true }
 
 tower-sessions = { version = "0.15", optional = true }
 

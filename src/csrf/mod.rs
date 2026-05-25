@@ -10,6 +10,7 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
+use subtle::ConstantTimeEq;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -44,6 +45,10 @@ impl CsrfTokens {
     }
 
     /// True iff `token` is well-formed and carries a valid signature we issued.
+    ///
+    /// Checks only the signature, not double-submit equality — prefer
+    /// [`Self::verify`] for CSRF validation. Exposed for callers that need a
+    /// standalone signature check (e.g. deciding whether to re-issue a cookie).
     pub fn is_valid(&self, token: &str) -> bool {
         let Some((rand_b64, sig_b64)) = token.split_once('.') else {
             return false;
@@ -65,17 +70,11 @@ impl CsrfTokens {
     }
 }
 
-/// Constant-time byte-slice equality. Length difference short-circuits (the
-/// length itself is not secret here).
+/// Constant-time byte-slice equality, backed by `subtle`. Unequal lengths are
+/// not constant-time (the length itself is not secret here), but content
+/// comparison is.
 fn ct_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut diff = 0u8;
-    for (x, y) in a.iter().zip(b.iter()) {
-        diff |= x ^ y;
-    }
-    diff == 0
+    a.ct_eq(b).into()
 }
 
 #[cfg(test)]
@@ -96,9 +95,21 @@ mod tests {
     fn tampered_signature_fails() {
         let t = CsrfTokens::new(KEY.to_vec());
         let token = t.generate();
-        let bad = format!("{token}x");
-        assert!(!t.is_valid(&bad));
-        assert!(!t.verify(&bad, &bad));
+
+        // Length-changing tamper: extra char.
+        let longer = format!("{token}x");
+        assert!(!t.is_valid(&longer));
+        assert!(!t.verify(&longer, &longer));
+
+        // Same-length tamper: flip one base64 char inside the signature.
+        let (rand_b64, sig_b64) = token.split_once('.').unwrap();
+        let mut sig: Vec<u8> = sig_b64.bytes().collect();
+        let mid = sig.len() / 2;
+        sig[mid] = if sig[mid] == b'A' { b'B' } else { b'A' };
+        let flipped = format!("{rand_b64}.{}", String::from_utf8(sig).unwrap());
+        assert_eq!(flipped.len(), token.len());
+        assert!(!t.is_valid(&flipped));
+        assert!(!t.verify(&flipped, &flipped));
     }
 
     #[test]
