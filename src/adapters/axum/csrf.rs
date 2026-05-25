@@ -143,7 +143,12 @@ where
                 if !ok {
                     let mut resp = Response::new(Body::from("CSRF token mismatch"));
                     *resp.status_mut() = StatusCode::from_u16(419).unwrap();
-                    set_token_cookie(resp.headers_mut(), &cfg);
+                    // Seed a token only if the client doesn't already hold a
+                    // valid one — don't rotate a good cookie out from under a
+                    // request whose header was merely missing/stale.
+                    if !cookie_is_valid {
+                        set_token_cookie(resp.headers_mut(), &cfg);
+                    }
                     return Ok(resp);
                 }
             }

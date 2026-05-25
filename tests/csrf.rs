@@ -118,3 +118,19 @@ async fn valid_cookie_not_reissued() {
     let resp = app().oneshot(r).await.unwrap();
     assert!(resp.headers().get(http::header::SET_COOKIE).is_none());
 }
+
+#[tokio::test]
+async fn valid_cookie_wrong_header_is_419_and_keeps_cookie() {
+    let token = token_from_get().await;
+    let r = Request::builder()
+        .method("POST")
+        .uri("/submit")
+        .header(http::header::COOKIE, format!("XSRF-TOKEN={token}"))
+        .header("x-xsrf-token", "bogus.value")
+        .body(Body::empty())
+        .unwrap();
+    let resp = app().oneshot(r).await.unwrap();
+    assert_eq!(resp.status(), 419);
+    // The existing cookie is still valid, so it must not be rotated.
+    assert!(resp.headers().get(http::header::SET_COOKIE).is_none());
+}
