@@ -150,3 +150,10 @@ async fn put_without_token_is_419() {
     let resp = app().oneshot(req("PUT", "/submit")).await.unwrap();
     assert_eq!(resp.status(), 419);
 }
+
+#[tokio::test]
+async fn options_request_is_not_verified() {
+    // Safe/non-mutating methods bypass CSRF verification entirely.
+    let resp = app().oneshot(req("OPTIONS", "/submit")).await.unwrap();
+    assert_ne!(resp.status(), 419);
+}

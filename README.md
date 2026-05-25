@@ -354,7 +354,7 @@ use veer::{EmbeddedAssets, ViteManifest, ViteRootView};
 #[folder = "dist/"]
 struct Assets;
 
-let manifest = ViteManifest::from_str(include_str!("../dist/.vite/manifest.json"))?;
+let manifest: ViteManifest = include_str!("../dist/.vite/manifest.json").parse()?;
 let version  = manifest.hash();
 
 let cfg = InertiaConfig::new()
