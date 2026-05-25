@@ -92,3 +92,19 @@ async fn mime_override_takes_effect() {
         "application/x-custom"
     );
 }
+
+#[tokio::test]
+async fn non_get_head_method_is_405_with_allow_header() {
+    let resp = app()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/build/assets/app-AAA.js")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 405);
+    assert_eq!(resp.headers().get("allow").unwrap(), "GET, HEAD");
+}

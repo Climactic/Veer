@@ -16,6 +16,7 @@
 
 use axum::body::Body;
 use axum::http::{header, Method, Request, Response, StatusCode};
+use bytes::Bytes;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -48,7 +49,7 @@ impl EmbeddedAssets {
     }
 
     /// Add or override an extension → content-type mapping (extension without
-    /// the dot, e.g. `.mime("wasm", "application/wasm")`).
+    /// the dot, e.g. `.mime("vtt", "text/vtt")`).
     pub fn mime(mut self, ext: impl Into<String>, content_type: impl Into<String>) -> Self {
         Arc::make_mut(&mut self.mimes).insert(ext.into(), content_type.into());
         self
@@ -64,7 +65,11 @@ impl EmbeddedAssets {
 
     fn serve(&self, req: Request<Body>) -> Response<Body> {
         if !matches!(*req.method(), Method::GET | Method::HEAD) {
-            return status(StatusCode::METHOD_NOT_ALLOWED);
+            return Response::builder()
+                .status(StatusCode::METHOD_NOT_ALLOWED)
+                .header(header::ALLOW, "GET, HEAD")
+                .body(Body::empty())
+                .unwrap();
         }
         let path = req.uri().path().trim_start_matches('/');
         match (self.resolver)(path) {
@@ -74,12 +79,17 @@ impl EmbeddedAssets {
                 let body = if *req.method() == Method::HEAD {
                     Body::empty()
                 } else {
-                    Body::from(bytes.into_owned())
+                    // Avoid copying for the common rust-embed case where the
+                    // bytes are 'static borrowed; only Owned needs a move.
+                    match bytes {
+                        Cow::Borrowed(b) => Body::from(Bytes::from_static(b)),
+                        Cow::Owned(v) => Body::from(v),
+                    }
                 };
                 Response::builder()
                     .status(StatusCode::OK)
                     .header(header::CONTENT_TYPE, ct)
-                    .header(header::CONTENT_LENGTH, len.to_string())
+                    .header(header::CONTENT_LENGTH, len)
                     .header(header::CACHE_CONTROL, "public, max-age=31536000, immutable")
                     .body(body)
                     .unwrap()
