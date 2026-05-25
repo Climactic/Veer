@@ -33,6 +33,8 @@
 //! | `cookie-session` | off | Signed-cookie session store |
 //! | `validator` | off | `IntoErrorBag` impl for `validator::ValidationErrors` |
 //! | `garde` | off | `IntoErrorBag` impl for `garde::Report` |
+//! | `csrf` | off | Inertia/axios-compatible CSRF layer (`CsrfLayer`) |
+//! | `embed` | off | Embedded-asset serving service (`EmbeddedAssets`) |
 //!
 //! # Architecture
 //!
