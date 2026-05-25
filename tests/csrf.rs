@@ -77,6 +77,14 @@ async fn post_with_matching_token_passes() {
 async fn post_without_token_is_419() {
     let resp = app().oneshot(req("POST", "/submit")).await.unwrap();
     assert_eq!(resp.status(), 419);
+    // A client with no cookie must be handed one so it can retry.
+    let set = resp
+        .headers()
+        .get(http::header::SET_COOKIE)
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert!(set.starts_with("XSRF-TOKEN="));
 }
 
 #[tokio::test]
@@ -133,4 +141,12 @@ async fn valid_cookie_wrong_header_is_419_and_keeps_cookie() {
     assert_eq!(resp.status(), 419);
     // The existing cookie is still valid, so it must not be rotated.
     assert!(resp.headers().get(http::header::SET_COOKIE).is_none());
+}
+
+#[tokio::test]
+async fn put_without_token_is_419() {
+    // CsrfLayer intercepts before routing, so a tokenless mutating verb is
+    // rejected regardless of whether a matching route exists.
+    let resp = app().oneshot(req("PUT", "/submit")).await.unwrap();
+    assert_eq!(resp.status(), 419);
 }

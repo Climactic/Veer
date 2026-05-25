@@ -165,7 +165,7 @@ where
 fn path_excluded(path: &str, excludes: &[String]) -> bool {
     excludes.iter().any(|p| {
         let p = p.trim_end_matches('/');
-        path == p || path.starts_with(&format!("{p}/"))
+        path == p || (path.starts_with(p) && path.as_bytes().get(p.len()) == Some(&b'/'))
     })
 }
 
