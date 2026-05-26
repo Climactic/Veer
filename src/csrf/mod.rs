@@ -46,10 +46,12 @@ impl CsrfTokens {
 
     /// True iff `token` is well-formed and carries a valid signature we issued.
     ///
-    /// Checks only the signature, not double-submit equality — prefer
-    /// [`Self::verify`] for CSRF validation. Exposed for callers that need a
-    /// standalone signature check (e.g. deciding whether to re-issue a cookie).
-    pub fn is_valid(&self, token: &str) -> bool {
+    /// Checks only the signature, **not** the double-submit cookie↔header
+    /// binding, so it is not a CSRF check on its own — that is what
+    /// [`Self::verify`] is for. Kept crate-internal so it can't be mistaken for
+    /// a validation entry point; the layer uses it to decide whether to
+    /// re-issue a cookie.
+    pub(crate) fn is_valid(&self, token: &str) -> bool {
         let Some((rand_b64, sig_b64)) = token.split_once('.') else {
             return false;
         };

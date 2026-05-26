@@ -108,3 +108,24 @@ async fn non_get_head_method_is_405_with_allow_header() {
     assert_eq!(resp.status(), 405);
     assert_eq!(resp.headers().get("allow").unwrap(), "GET, HEAD");
 }
+
+#[tokio::test]
+async fn invalid_mime_override_falls_back_instead_of_panicking() {
+    let a = EmbeddedAssets::new(|p: &str| (p == "x.bad").then_some(Cow::Borrowed(b"hi" as &[u8])))
+        .mime("bad", "text/bad\r\ninjected: 1");
+    let app = Router::new().nest_service("/build", a);
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri("/build/x.bad")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    assert_eq!(
+        resp.headers().get("content-type").unwrap(),
+        "application/octet-stream"
+    );
+}

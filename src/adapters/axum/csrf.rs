@@ -78,8 +78,17 @@ impl CsrfLayer {
 
     /// Skip verification for a path prefix (matches the path exactly or as a
     /// `/`-bounded prefix). Repeatable. Use for webhook endpoints.
+    ///
+    /// A missing leading `/` is added for you, so `exclude("webhooks")` and
+    /// `exclude("/webhooks")` are equivalent. An empty or `"/"` prefix is
+    /// ignored rather than excluding everything (which would silently disable
+    /// CSRF protection).
     pub fn exclude(mut self, path: impl Into<String>) -> Self {
-        self.config.excludes.push(path.into());
+        let mut p = path.into();
+        if !p.starts_with('/') {
+            p.insert(0, '/');
+        }
+        self.config.excludes.push(p);
         self
     }
 }
@@ -117,7 +126,11 @@ where
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
         let cfg = self.config.clone();
-        let mut inner = self.inner.clone();
+        // Tower contract: drive the instance that poll_ready readied, leaving a
+        // fresh clone behind for the next call (rather than calling an unpolled
+        // clone).
+        let clone = self.inner.clone();
+        let mut inner = std::mem::replace(&mut self.inner, clone);
         Box::pin(async move {
             let cookie_val = read_cookie(req.headers(), &cfg.cookie_name);
             let cookie_is_valid = cookie_val
@@ -143,6 +156,10 @@ where
                 if !ok {
                     let mut resp = Response::new(Body::from("CSRF token mismatch"));
                     *resp.status_mut() = StatusCode::from_u16(419).unwrap();
+                    resp.headers_mut().insert(
+                        header::CONTENT_TYPE,
+                        http::HeaderValue::from_static("text/plain; charset=utf-8"),
+                    );
                     // Seed a token only if the client doesn't already hold a
                     // valid one — don't rotate a good cookie out from under a
                     // request whose header was merely missing/stale.
@@ -165,6 +182,11 @@ where
 fn path_excluded(path: &str, excludes: &[String]) -> bool {
     excludes.iter().any(|p| {
         let p = p.trim_end_matches('/');
+        // An empty prefix would prefix-match every path and silently disable
+        // CSRF; treat it as matching nothing (fail closed).
+        if p.is_empty() {
+            return false;
+        }
         path == p || (path.starts_with(p) && path.as_bytes().get(p.len()) == Some(&b'/'))
     })
 }

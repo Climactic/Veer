@@ -157,3 +157,27 @@ async fn options_request_is_not_verified() {
     let resp = app().oneshot(req("OPTIONS", "/submit")).await.unwrap();
     assert_ne!(resp.status(), 419);
 }
+
+#[tokio::test]
+async fn exclude_root_does_not_disable_csrf() {
+    // `.exclude("/")` must not silently turn protection off for everything.
+    let app = Router::new()
+        .route("/submit", post(|| async { "done" }))
+        .layer(CsrfLayer::new(SECRET.to_vec()).secure(false).exclude("/"));
+    let resp = app.oneshot(req("POST", "/submit")).await.unwrap();
+    assert_eq!(resp.status(), 419);
+}
+
+#[tokio::test]
+async fn exclude_without_leading_slash_still_matches() {
+    // `.exclude("webhooks")` is normalized to `/webhooks`.
+    let app = Router::new()
+        .route("/webhooks/stripe", post(|| async { "ok" }))
+        .layer(
+            CsrfLayer::new(SECRET.to_vec())
+                .secure(false)
+                .exclude("webhooks"),
+        );
+    let resp = app.oneshot(req("POST", "/webhooks/stripe")).await.unwrap();
+    assert_eq!(resp.status(), 200);
+}

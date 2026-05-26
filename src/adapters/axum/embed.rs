@@ -15,7 +15,7 @@
 //! ```
 
 use axum::body::Body;
-use axum::http::{header, Method, Request, Response, StatusCode};
+use axum::http::{header, HeaderValue, Method, Request, Response, StatusCode};
 use bytes::Bytes;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -28,6 +28,11 @@ use tower::Service;
 type Resolver = dyn Fn(&str) -> Option<Cow<'static, [u8]>> + Send + Sync;
 
 /// Tower service that serves embedded assets via a byte-resolver closure.
+///
+/// Responses carry `Cache-Control: public, max-age=31536000, immutable`, which
+/// assumes Vite-style content-hashed filenames. Don't route non-fingerprinted
+/// files (e.g. `robots.txt`, `manifest.webmanifest`) through this service —
+/// they would be cached for a year with no revalidation path.
 #[derive(Clone)]
 pub struct EmbeddedAssets {
     resolver: Arc<Resolver>,
@@ -74,7 +79,10 @@ impl EmbeddedAssets {
         let path = req.uri().path().trim_start_matches('/');
         match (self.resolver)(path) {
             Some(bytes) => {
-                let ct = self.content_type(path);
+                // A bad `.mime()` override must not panic the builder; fall
+                // back to octet-stream if it isn't a valid header value.
+                let ct = HeaderValue::try_from(self.content_type(path))
+                    .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream"));
                 let len = bytes.len();
                 let body = if *req.method() == Method::HEAD {
                     Body::empty()
