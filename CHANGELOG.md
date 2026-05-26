@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-05-26
+
 ### Added
 
 - `csrf` feature: `CsrfLayer`, a standalone tower layer providing
@@ -15,3 +17,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `embed` feature: `EmbeddedAssets`, an axum service for serving build assets
   embedded in the binary (rust-embed / `include_dir` / map) — the single-binary
   deploy counterpart to `ServeDir`.
+
+[Unreleased]: https://github.com/Climactic/Veer/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/Climactic/Veer/compare/v0.1.1...v0.1.2
