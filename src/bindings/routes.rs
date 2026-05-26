@@ -32,7 +32,7 @@ pub struct RouteEntry {
     /// Dotted name (e.g. `"users.show"`). The first segment becomes the
     /// controller (module / namespace); the remainder is the action.
     pub name: &'static str,
-    /// Axum path pattern (e.g. `"/users/:id"` or `"/files/*rest"`).
+    /// Axum path pattern (e.g. `"/users/{id}"` or `"/files/{*rest}"`).
     pub path: &'static str,
     /// HTTP method as a lowercase string (`"get"`, `"post"`, …).
     pub method: &'static str,
@@ -223,9 +223,7 @@ fn write_url_template(s: &mut String, path: &str, params: &[&str]) {
             continue;
         }
         s.push('/');
-        if let Some(name) = seg.strip_prefix(':') {
-            let _ = write!(s, "${{params.{name}}}");
-        } else if let Some(name) = seg.strip_prefix('*') {
+        if let Some(name) = segment_param(seg) {
             let _ = write!(s, "${{params.{name}}}");
         } else {
             s.push_str(seg);
@@ -234,10 +232,16 @@ fn write_url_template(s: &mut String, path: &str, params: &[&str]) {
     s.push('`');
 }
 
+/// Extract the capture name from one axum 0.8 path segment: `{id}` → `"id"`,
+/// `{*rest}` → `"rest"`. Returns `None` for literal segments. (axum 0.7 used
+/// `:id` / `*rest`, which 0.8 rejects at router-build time.)
+fn segment_param(seg: &str) -> Option<&str> {
+    let inner = seg.strip_prefix('{')?.strip_suffix('}')?;
+    Some(inner.strip_prefix('*').unwrap_or(inner))
+}
+
 fn parse_params(path: &str) -> Vec<&str> {
-    path.split('/')
-        .filter_map(|seg| seg.strip_prefix(':').or_else(|| seg.strip_prefix('*')))
-        .collect()
+    path.split('/').filter_map(segment_param).collect()
 }
 
 fn is_ident(name: &str) -> bool {
@@ -329,5 +333,19 @@ fn js_ident(name: &str) -> String {
         format!("{base}_")
     } else {
         base
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_params;
+
+    #[test]
+    fn parses_axum_08_path_params() {
+        assert_eq!(parse_params("/todos/{id}"), vec!["id"]);
+        assert_eq!(parse_params("/users/{id}/posts/{post}"), vec!["id", "post"]);
+        assert_eq!(parse_params("/files/{*rest}"), vec!["rest"]);
+        assert!(parse_params("/todos").is_empty());
+        assert!(parse_params("/todos/new").is_empty());
     }
 }

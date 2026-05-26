@@ -14,7 +14,7 @@ pub fn router() -> veer::Router<TodoStore> {
         .named_route(GET, "todos.index", "/todos", todos_index)
         .named_route(POST, "todos.store", "/todos", todos_create)
         .named_route(GET, "todos.create", "/todos/new", todos_new)
-        .named_route(DELETE, "todos.destroy", "/todos/:id", todos_delete)
+        .named_route(DELETE, "todos.destroy", "/todos/{id}", todos_delete)
 }
 
 async fn home(inertia: Inertia) -> impl axum::response::IntoResponse {

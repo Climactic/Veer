@@ -1,8 +1,8 @@
 use axum_react_todo::{router, todos::TodoStore};
 use std::net::SocketAddr;
 use veer::{
-    session::cookie::CookieSessionStore, ssr::http::HttpSsrClient, InertiaConfig, InertiaLayer,
-    ViteRootView,
+    session::cookie::CookieSessionStore, ssr::http::HttpSsrClient, CsrfLayer, InertiaConfig,
+    InertiaLayer, ViteRootView,
 };
 
 #[tokio::main]
@@ -44,10 +44,14 @@ async fn main() {
         cfg = cfg.csr_only(true);
     }
 
+    // CSRF protection (demo secret — load from config/env in production).
+    // Stacked outside InertiaLayer so it verifies before the handler runs and
+    // issues the XSRF-TOKEN cookie the Inertia/axios client echoes back.
     let app = router()
         .build()
         .with_state(store)
-        .layer(InertiaLayer::new(cfg));
+        .layer(InertiaLayer::new(cfg))
+        .layer(CsrfLayer::new(b"01234567890123456789012345678901".to_vec()).secure(false));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     println!(

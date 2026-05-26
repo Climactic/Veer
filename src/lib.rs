@@ -33,6 +33,8 @@
 //! | `cookie-session` | off | Signed-cookie session store |
 //! | `validator` | off | `IntoErrorBag` impl for `validator::ValidationErrors` |
 //! | `garde` | off | `IntoErrorBag` impl for `garde::Report` |
+//! | `csrf` | off | Inertia/axios-compatible CSRF layer (`CsrfLayer`) |
+//! | `embed` | off | Embedded-asset serving service (`EmbeddedAssets`) |
 //!
 //! # Architecture
 //!
@@ -69,6 +71,9 @@ pub mod session;
 pub mod shared;
 pub mod ssr;
 
+#[cfg(feature = "csrf")]
+pub mod csrf;
+
 #[cfg(feature = "multipart")]
 pub mod multipart;
 
@@ -87,6 +92,8 @@ pub mod __private {
 }
 
 pub use config::InertiaConfig;
+#[cfg(feature = "csrf")]
+pub use csrf::CsrfTokens;
 pub use error::VeerError;
 pub use inertia::Inertia;
 pub use page::PageObject;
@@ -100,6 +107,12 @@ pub use ssr::{SsrClient, SsrPayload};
 
 #[cfg(feature = "axum")]
 pub use adapters::axum::{InertiaForm, InertiaFormRejection, InertiaLayer, Method, Router};
+
+#[cfg(feature = "csrf")]
+pub use adapters::axum::CsrfLayer;
+
+#[cfg(feature = "embed")]
+pub use adapters::axum::EmbeddedAssets;
 
 #[cfg(feature = "multipart")]
 pub use multipart::UploadedFile;

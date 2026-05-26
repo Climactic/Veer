@@ -18,6 +18,14 @@ dev:
     bun dev &
     if [ "${SSR:-}" = "1" ]; then
       bun run ssr:dev &
+      # The backend runs with ssr_required(true), so a request that arrives
+      # before the sidecar is ready fails with "ssr transport: error sending
+      # request". Wait for the sidecar's /health to respond before starting it.
+      echo "waiting for SSR sidecar on :13714..."
+      for _ in {1..100}; do
+        if curl -sf -o /dev/null http://127.0.0.1:13714/health 2>/dev/null; then echo "SSR sidecar ready"; break; fi
+        sleep 0.1
+      done
     fi
     SSR="${SSR:-}" cargo run &
     wait

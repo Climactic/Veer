@@ -297,6 +297,85 @@ For SSR in production, build the sidecar with `vite build --ssr frontend/ssr.tsx
 </details>
 
 <details>
+<summary><b>CSRF protection (Inertia/axios)</b></summary>
+
+The Inertia client uses axios, which reads an `XSRF-TOKEN` cookie and echoes it
+back in an `X-XSRF-TOKEN` header on every mutating request — no frontend code
+needed. `CsrfLayer` is the server side of that convention: it issues the cookie
+and verifies the header using a stateless, HMAC-signed double-submit token (no
+server-side session required).
+
+Enable the `csrf` feature and stack the layer next to `InertiaLayer`:
+
+```toml
+veer = { version = "0.1", features = ["csrf"] }
+```
+
+```rust,ignore
+use veer::{CsrfLayer, InertiaLayer};
+
+let app = router()
+    .with_state(state)
+    .layer(InertiaLayer::new(cfg))
+    .layer(CsrfLayer::new(secret));   // 32-byte secret; outermost layer
+```
+
+On a token mismatch the layer short-circuits with `419` (the Laravel/Inertia
+convention for an expired token) before the handler runs. Safe methods
+(GET/HEAD/OPTIONS/TRACE) are never checked. For endpoints that can't carry the
+header (third-party webhooks), exclude them:
+
+```rust,ignore
+CsrfLayer::new(secret).exclude("/webhooks")
+```
+
+The cookie is JS-readable by design (so axios can echo it); it is `Secure` +
+`SameSite=Lax` by default — call `.secure(false)` for local HTTP dev.
+
+</details>
+
+<details>
+<summary><b>Embedded assets (single-binary deploy)</b></summary>
+
+For a single self-contained binary, embed the built frontend instead of serving
+it from disk. The manifest embeds via `include_str!`; `EmbeddedAssets` serves the
+bytes. Enable the `embed` feature:
+
+```toml
+veer = { version = "0.1", features = ["embed"] }
+rust-embed = "8"
+```
+
+```rust,ignore
+use rust_embed::RustEmbed;
+use veer::{EmbeddedAssets, ViteManifest, ViteRootView};
+
+#[derive(RustEmbed)]
+#[folder = "dist/"]
+struct Assets;
+
+let manifest: ViteManifest = include_str!("../dist/.vite/manifest.json").parse()?;
+let version  = manifest.hash();
+
+let cfg = InertiaConfig::new()
+    .version(move || version.clone().into())
+    .root_view(ViteRootView::production().entry("frontend/app.tsx").manifest(manifest));
+
+let app = router()
+    .with_state(state)
+    .layer(InertiaLayer::new(cfg))
+    // Replaces `.nest_service("/build", ServeDir::new("dist"))`:
+    .nest_service("/build", EmbeddedAssets::new(|p| Assets::get(p).map(|f| f.data)));
+```
+
+`EmbeddedAssets` takes any `Fn(&str) -> Option<Cow<'static, [u8]>>`, so it works
+with `rust-embed`, `include_dir`, or a plain map — Veer depends on none of them.
+It sets `Content-Type` from the file extension and serves content-hashed assets
+with `Cache-Control: public, max-age=31536000, immutable`.
+
+</details>
+
+<details>
 <summary><b>End-to-end TypeScript bindings (Wayfinder-style)</b></summary>
 
 Enable the `ts` feature and the frontend gets an auto-generated `gen/` directory containing every page's props type, a discriminated `Pages` union, and one TypeScript module per controller with method-aware URL builders.
@@ -483,6 +562,8 @@ Flash is stored under a single key (`_veer_flash` by default; override with `Tow
 | `tower-sessions` | off | Flash store backed by [`tower-sessions`](https://crates.io/crates/tower-sessions) |
 | `validator` | off | `IntoErrorBag` impl for `validator::ValidationErrors` |
 | `garde` | off | `IntoErrorBag` impl for `garde::Report` |
+| `csrf` | off | Inertia/axios-compatible CSRF protection (`CsrfLayer`) |
+| `embed` | off | Embedded-asset serving for single-binary deploys (`EmbeddedAssets`) |
 | `ts` | off | End-to-end TypeScript bindings codegen (`ts-rs` + `inventory`) |
 
 Disabling a feature drops its transitive deps entirely.
