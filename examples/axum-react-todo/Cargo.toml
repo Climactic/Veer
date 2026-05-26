@@ -3,6 +3,9 @@ name = "axum-react-todo"
 version = "0.0.1"
 edition = "2021"
 publish = false
+# Two binaries live here (the server + the `gen-bindings` codegen tool), so
+# `cargo run` / `just dev` need a default; `cargo run --bin gen-bindings` still works.
+default-run = "axum-react-todo"
 
 [dependencies]
 veer = { path = "../..", features = ["axum", "cookie-session", "csrf", "validator", "ssr", "ts"] }
