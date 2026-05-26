@@ -122,7 +122,10 @@ impl Service<Request<Body>> for EmbeddedAssets {
 }
 
 fn status(code: StatusCode) -> Response<Body> {
-    Response::builder().status(code).body(Body::empty()).unwrap()
+    Response::builder()
+        .status(code)
+        .body(Body::empty())
+        .unwrap()
 }
 
 fn builtin_mime(ext: &str) -> &'static str {

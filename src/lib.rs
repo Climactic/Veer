@@ -92,6 +92,8 @@ pub mod __private {
 }
 
 pub use config::InertiaConfig;
+#[cfg(feature = "csrf")]
+pub use csrf::CsrfTokens;
 pub use error::VeerError;
 pub use inertia::Inertia;
 pub use page::PageObject;
@@ -101,8 +103,6 @@ pub use response::InertiaResponse;
 pub use root_view::{MinimalRootView, RootView, RootViewContext, ViteManifest, ViteRootView};
 pub use session::{Flash, SessionStore};
 pub use shared::SharedProps;
-#[cfg(feature = "csrf")]
-pub use csrf::CsrfTokens;
 pub use ssr::{SsrClient, SsrPayload};
 
 #[cfg(feature = "axum")]

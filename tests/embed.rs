@@ -30,7 +30,10 @@ async fn serves_known_asset_with_type_and_cache() {
         .await
         .unwrap();
     assert_eq!(resp.status(), 200);
-    assert_eq!(resp.headers().get("content-type").unwrap(), "text/javascript");
+    assert_eq!(
+        resp.headers().get("content-type").unwrap(),
+        "text/javascript"
+    );
     assert_eq!(
         resp.headers().get("cache-control").unwrap(),
         "public, max-age=31536000, immutable"
@@ -73,10 +76,9 @@ async fn head_has_length_but_empty_body() {
 
 #[tokio::test]
 async fn mime_override_takes_effect() {
-    let a = EmbeddedAssets::new(|p: &str| {
-        (p == "x.custom").then_some(Cow::Borrowed(b"hi" as &[u8]))
-    })
-    .mime("custom", "application/x-custom");
+    let a =
+        EmbeddedAssets::new(|p: &str| (p == "x.custom").then_some(Cow::Borrowed(b"hi" as &[u8])))
+            .mime("custom", "application/x-custom");
     let app = Router::new().nest_service("/build", a);
     let resp = app
         .oneshot(
