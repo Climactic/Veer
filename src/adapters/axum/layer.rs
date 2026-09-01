@@ -100,7 +100,8 @@ where
                     method_for_post.clone(),
                     url_for_finalize,
                     &headers_clone,
-                );
+                )
+                .with_extensions((*extensions_snapshot).clone());
                 // Marker wraps Arc<Mutex<Option<InertiaResponse>>>. Take the inner value.
                 let inner_response = marker
                     .0

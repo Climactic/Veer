@@ -217,16 +217,27 @@ inertia
 ```rust,ignore
 use veer::shared::shared_props_fn;
 
+let app_context = app_context.clone();
 let cfg = InertiaConfig::new()
-    .shared(shared_props_fn(|_req| async move {
-        serde_json::json!({
-            "auth": { "user": current_user().await },
-            "app": { "name": "Acme" },
-        })
+    .shared(shared_props_fn(move |req| {
+        let app_context = app_context.clone();
+        let session = req.extension::<tower_sessions::Session>().cloned();
+        async move {
+            let user = match session {
+                Some(session) => current_user(&app_context, &session).await,
+                None => None,
+            };
+            serde_json::json!({
+                "auth": { "user": user },
+                "app": { "name": "Acme" },
+            })
+        }
     }));
 ```
 
 Shared props merge under per-response props (handler props win on key collision).
+Request extensions installed by outer middleware, including a
+`tower_sessions::Session`, are available through `RequestInfo::extension`.
 
 </details>
 

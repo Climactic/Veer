@@ -1,6 +1,6 @@
 //! Per-request data parsed from Inertia headers.
 
-use http::{HeaderMap, Method};
+use http::{Extensions, HeaderMap, Method};
 use std::collections::HashSet;
 
 /// Request information needed to drive the Inertia protocol.
@@ -27,6 +27,7 @@ pub struct RequestInfo {
     pub partial_except: HashSet<String>,
     /// Keys the client wants reset (clear merge state for these).
     pub reset: HashSet<String>,
+    extensions: Extensions,
 }
 
 impl RequestInfo {
@@ -70,7 +71,27 @@ impl RequestInfo {
             partial_only: split_csv(headers, &crate::headers::X_INERTIA_PARTIAL_DATA),
             partial_except: split_csv(headers, &crate::headers::X_INERTIA_PARTIAL_EXCEPT),
             reset: split_csv(headers, &crate::headers::X_INERTIA_RESET),
+            extensions: Extensions::new(),
         }
+    }
+
+    /// Attach extensions installed by outer request middleware.
+    ///
+    /// Adapters use this to make request-scoped values such as sessions
+    /// available to shared prop resolvers.
+    pub fn with_extensions(mut self, extensions: Extensions) -> Self {
+        self.extensions = extensions;
+        self
+    }
+
+    /// Return the request extensions installed by outer middleware.
+    pub fn extensions(&self) -> &Extensions {
+        &self.extensions
+    }
+
+    /// Return a request extension by type.
+    pub fn extension<T: Send + Sync + 'static>(&self) -> Option<&T> {
+        self.extensions.get::<T>()
     }
 
     /// Returns `true` if the request is a partial reload (component header set + only/except non-empty).
@@ -142,5 +163,19 @@ mod tests {
         assert!(info.partial_only.contains("stats"));
         assert!(info.partial_except.contains("auth"));
         assert!(info.is_partial());
+    }
+
+    #[test]
+    fn request_extensions_are_available() {
+        let mut extensions = Extensions::new();
+        extensions.insert(String::from("session-user"));
+
+        let info = RequestInfo::from_parts(Method::GET, "/".into(), &HeaderMap::new())
+            .with_extensions(extensions);
+
+        assert_eq!(
+            info.extension::<String>().map(String::as_str),
+            Some("session-user")
+        );
     }
 }

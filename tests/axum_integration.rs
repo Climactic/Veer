@@ -2,13 +2,15 @@ mod common;
 
 use axum::{
     routing::{get, post},
-    Router,
+    Extension, Router,
 };
 use common::*;
 use http_body_util::BodyExt;
 use serde_json::json;
 use tower::ServiceExt;
-use veer::{Inertia, InertiaConfig, InertiaLayer, MinimalRootView};
+#[cfg(feature = "tower-sessions")]
+use tower_sessions::{MemoryStore, Session, SessionManagerLayer};
+use veer::{shared::shared_props_fn, Inertia, InertiaConfig, InertiaLayer, MinimalRootView};
 
 fn app(config: InertiaConfig) -> Router {
     Router::new()
@@ -132,4 +134,57 @@ async fn csr_only_returns_json_for_plain_get() {
         resp.headers().get("content-type").unwrap(),
         "application/json"
     );
+}
+
+#[tokio::test]
+async fn shared_props_can_read_request_extensions() {
+    #[derive(Clone)]
+    struct SessionUser(&'static str);
+
+    let cfg = InertiaConfig::new()
+        .version(|| "v1".into())
+        .shared(shared_props_fn(|request| {
+            let user = request.extension::<SessionUser>().map(|user| user.0);
+            async move { json!({"auth": {"user": user}}) }
+        }));
+    let app = app(cfg).layer(Extension(SessionUser("Ada")));
+
+    let response = app.oneshot(req_inertia("GET", "/", "v1")).await.unwrap();
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let page: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(page["props"]["auth"]["user"], "Ada");
+}
+
+#[cfg(feature = "tower-sessions")]
+#[tokio::test]
+async fn shared_props_can_read_tower_session() {
+    let cfg = InertiaConfig::new()
+        .version(|| "v1".into())
+        .shared(shared_props_fn(|request| {
+            let session = request.extension::<Session>().cloned();
+            async move {
+                let user = match session {
+                    Some(session) => session.get::<String>("user").await.unwrap(),
+                    None => None,
+                };
+                json!({"auth": {"user": user}})
+            }
+        }));
+    let app = Router::new()
+        .route(
+            "/",
+            get(|inertia: Inertia, session: Session| async move {
+                session.insert("user", "Ada").await.unwrap();
+                inertia.render("Home", json!({"msg": "hello"}))
+            }),
+        )
+        .layer(InertiaLayer::new(cfg))
+        .layer(SessionManagerLayer::new(MemoryStore::default()).with_secure(false));
+
+    let response = app.oneshot(req_inertia("GET", "/", "v1")).await.unwrap();
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let page: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(page["props"]["auth"]["user"], "Ada");
 }

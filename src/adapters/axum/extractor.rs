@@ -41,7 +41,8 @@ where
             .path_and_query()
             .map(|p| p.as_str().to_string())
             .unwrap_or_else(|| parts.uri.path().to_string());
-        let req_info = RequestInfo::from_parts(parts.method.clone(), url, &parts.headers);
+        let req_info = RequestInfo::from_parts(parts.method.clone(), url, &parts.headers)
+            .with_extensions((*per.req_extensions).clone());
         Ok(Inertia::from_parts(
             per.config,
             req_info,

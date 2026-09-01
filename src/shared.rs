@@ -7,10 +7,23 @@ use std::future::Future;
 use std::sync::Arc;
 
 /// Resolves shared props on each request.
+///
+/// Middleware-installed request values, such as a `tower_sessions::Session`,
+/// can be read through [`RequestInfo::extension`].
 #[async_trait]
 pub trait SharedProps: Send + Sync {
     /// Produce the shared props for this request.
     async fn shared(&self, req: &RequestInfo) -> Value;
+}
+
+#[async_trait]
+impl<P> SharedProps for Arc<P>
+where
+    P: SharedProps + ?Sized,
+{
+    async fn shared(&self, req: &RequestInfo) -> Value {
+        self.as_ref().shared(req).await
+    }
 }
 
 /// Adapter for `Fn(&RequestInfo) -> impl Future<Output = Value>`.
@@ -27,7 +40,7 @@ where
     }
 }
 
-/// Helper to wrap a closure as a boxed `SharedProps` trait object.
+/// Helper to wrap a closure as a boxed [`SharedProps`] resolver.
 pub fn shared_props_fn<F, Fut>(f: F) -> Arc<dyn SharedProps>
 where
     F: Fn(&RequestInfo) -> Fut + Send + Sync + 'static,
