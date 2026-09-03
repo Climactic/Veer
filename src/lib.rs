@@ -102,7 +102,7 @@ pub use request::RequestInfo;
 pub use response::InertiaResponse;
 pub use root_view::{MinimalRootView, RootView, RootViewContext, ViteManifest, ViteRootView};
 pub use session::{Flash, SessionStore};
-pub use shared::SharedProps;
+pub use shared::{SharedProps, SharedPropsData};
 pub use ssr::{SsrClient, SsrPayload};
 
 #[cfg(feature = "axum")]

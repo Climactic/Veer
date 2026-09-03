@@ -188,3 +188,54 @@ async fn shared_props_can_read_tower_session() {
 
     assert_eq!(page["props"]["auth"]["user"], "Ada");
 }
+
+#[tokio::test]
+async fn shared_lazy_props_execute_only_when_requested_and_page_props_win() {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+    let calls = Arc::new(AtomicUsize::new(0));
+    let shared_calls = calls.clone();
+    let cfg = InertiaConfig::new()
+        .version(|| "v1".into())
+        .shared(shared_props_fn(move |_| {
+            let calls = shared_calls.clone();
+            async move {
+                veer::SharedPropsData::new(json!({"count": 3}))
+                    .lazy("notifications", move || async move {
+                        calls.fetch_add(1, Ordering::SeqCst);
+                        json!(["notice"])
+                    })
+                    .lazy("msg", || async { panic!("page values must win") })
+                    .lazy("stats", || async { panic!("page lazy values must win") })
+            }
+        }));
+    let app = app(cfg);
+    for (path, component, only, expected_calls) in [
+        ("/", "Home", "", 0),
+        ("/", "Home", "count", 0),
+        ("/", "WrongComponent", "notifications", 0),
+        ("/", "Home", "notifications", 1),
+        ("/", "Home", "msg", 1),
+        ("/with-lazy", "WithLazy", "stats", 1),
+    ] {
+        let mut request = req_inertia("GET", path, "v1");
+        if !only.is_empty() {
+            request
+                .headers_mut()
+                .insert("x-inertia-partial-component", component.parse().unwrap());
+            request
+                .headers_mut()
+                .insert("x-inertia-partial-data", only.parse().unwrap());
+        }
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 200);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let page: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(calls.load(Ordering::SeqCst), expected_calls);
+        if component == "Home" && only == "notifications" {
+            assert_eq!(page["props"]["notifications"], json!(["notice"]));
+        }
+    }
+}

@@ -18,5 +18,8 @@ pub const X_INERTIA_PARTIAL_EXCEPT: HeaderName =
     HeaderName::from_static("x-inertia-partial-except");
 /// Indicates the client wants the server to reset specific merged props.
 pub const X_INERTIA_RESET: HeaderName = HeaderName::from_static("x-inertia-reset");
+/// Once-prop cache keys already held by the client.
+pub const X_INERTIA_EXCEPT_ONCE_PROPS: HeaderName =
+    HeaderName::from_static("x-inertia-except-once-props");
 /// Set on JSON responses so caches vary correctly.
 pub const VARY: HeaderName = HeaderName::from_static("vary");

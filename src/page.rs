@@ -29,9 +29,19 @@ pub struct PageObject {
     /// Keys whose merge state the server is asking the client to reset.
     #[serde(rename = "resetMergeProps", skip_serializing_if = "Vec::is_empty")]
     pub reset_merge_props: Vec<String>,
+    /// Client cache key to prop mapping for remembered values.
+    #[serde(rename = "onceProps", skip_serializing_if = "BTreeMap::is_empty")]
+    pub once_props: BTreeMap<String, OncePropMetadata>,
     /// Deferred props grouped by group name (Inertia v2+).
     #[serde(rename = "deferredProps", skip_serializing_if = "BTreeMap::is_empty")]
     pub deferred_props: BTreeMap<String, Vec<String>>,
+}
+
+/// Metadata identifying a value remembered by the Inertia client.
+#[derive(Debug, Clone, Serialize)]
+pub struct OncePropMetadata {
+    /// Name of the prop containing the remembered value.
+    pub prop: String,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -56,6 +66,7 @@ impl PageObject {
             merge_props: Vec::new(),
             reset_merge_props: Vec::new(),
             deferred_props: BTreeMap::new(),
+            once_props: BTreeMap::new(),
         }
     }
 }

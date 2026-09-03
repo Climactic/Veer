@@ -239,6 +239,21 @@ Shared props merge under per-response props (handler props win on key collision)
 Request extensions installed by outer middleware, including a
 `tower_sessions::Session`, are available through `RequestInfo::extension`.
 
+Return `SharedPropsData` to attach shared props that are loaded only on demand:
+
+```rust,ignore
+use veer::SharedPropsData;
+
+SharedPropsData::new(serde_json::json!({ "unread_count": unread_count }))
+    .lazy("notifications", move || async move {
+        serde_json::json!(load_notifications(&client).await)
+    })
+```
+
+The lazy closure runs only when a matching partial reload explicitly requests
+its key. Initial visits and unrelated reloads do not execute it. Page values
+and page lazy/deferred props take precedence over shared lazy props.
+
 </details>
 
 <details>
@@ -410,6 +425,17 @@ pub struct UsersIndexProps {
     pub users: Vec<User>,
 }
 veer::register_page!(UsersIndexProps, "Users/Index");
+```
+
+Register action payloads or other standalone frontend contracts separately:
+
+```rust,ignore
+#[derive(serde::Deserialize, ts_rs::TS)]
+struct UpdateProfileForm {
+    display_name: String,
+}
+
+veer::register_type!(UpdateProfileForm);
 ```
 
 Then build your router using `veer::Router` — same fluent API as `axum::Router`, but every route gets a name and method so the codegen knows about it:

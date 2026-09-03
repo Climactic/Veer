@@ -1,6 +1,6 @@
 //! Resolve a serialized props tree against request partial-reload rules.
 
-use crate::props::closure::{DeferredProp, LazyProp};
+use crate::props::closure::{DeferredProp, LazyProp, OnceProp};
 use crate::request::RequestInfo;
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -12,6 +12,8 @@ pub struct ResolvedProps {
     pub props: Value,
     /// Keys to record under `page.mergeProps`.
     pub merge_props: Vec<String>,
+    /// Client cache metadata, including already remembered values.
+    pub once_props: BTreeMap<String, crate::page::OncePropMetadata>,
     /// Deferred groups → key list (only populated on first/non-partial responses).
     pub deferred_props: BTreeMap<String, Vec<String>>,
 }
@@ -26,6 +28,8 @@ pub struct ResolveInput<'a> {
     pub base: SerializedBase,
     /// Builder-attached lazy/optional props by top-level key (both routes share this map).
     pub lazies: HashMap<String, LazyProp>,
+    /// Props remembered by the client.
+    pub once: HashMap<String, OnceProp>,
     /// Builder-attached deferred props by top-level key.
     pub deferreds: HashMap<String, DeferredProp>,
     /// Builder-attached merge props by top-level key (already serialized).
@@ -154,6 +158,7 @@ pub async fn resolve(input: ResolveInput<'_>) -> ResolvedProps {
         component,
         base,
         lazies,
+        once,
         deferreds,
         merges,
         shared,
@@ -173,6 +178,25 @@ pub async fn resolve(input: ResolveInput<'_>) -> ResolvedProps {
     let except: &HashSet<String> = &req.partial_except;
 
     let mut deferred_groups: BTreeMap<String, Vec<String>> = BTreeMap::new();
+
+    let mut once_props = BTreeMap::new();
+    for (key, prop) in once {
+        let explicitly_requested = partial_for_this_component && only.contains(&key);
+        let selected = !partial_for_this_component
+            || (only.is_empty() || explicitly_requested) && !except.contains(&key);
+        if selected {
+            once_props.insert(
+                prop.key.clone(),
+                crate::page::OncePropMetadata { prop: key.clone() },
+            );
+        }
+        let remembered = req.is_inertia && req.except_once_props.contains(&prop.key);
+        if selected && (!remembered || explicitly_requested) {
+            set_top(&mut tree, &key, (prop.closure)().await);
+        } else {
+            remove_top(&mut tree, &key);
+        }
+    }
 
     for (key, prop) in lazies {
         let include = if partial_for_this_component {
@@ -216,7 +240,7 @@ pub async fn resolve(input: ResolveInput<'_>) -> ResolvedProps {
             for k in keys {
                 let path = format!("/{k}");
                 let is_always = always.contains(&path);
-                let allowed = is_always || only.contains(&k);
+                let allowed = is_always || only.is_empty() || only.contains(&k);
                 let excluded = !is_always && except.contains(&k);
                 if !allowed || excluded {
                     map.remove(&k);
@@ -242,6 +266,7 @@ pub async fn resolve(input: ResolveInput<'_>) -> ResolvedProps {
         props: tree,
         merge_props,
         deferred_props: deferred_groups,
+        once_props,
     }
 }
 
@@ -314,6 +339,7 @@ mod tests {
             component: "Users/Index",
             base: empty_base(json!({"users": [1,2]})),
             lazies,
+            once: HashMap::new(),
             deferreds: HashMap::new(),
             merges: HashSet::new(),
             shared: None,
@@ -337,6 +363,7 @@ mod tests {
             component: "Users/Index",
             base: empty_base(json!({"users": [1,2]})),
             lazies,
+            once: HashMap::new(),
             deferreds: HashMap::new(),
             merges: HashSet::new(),
             shared: None,
@@ -362,6 +389,7 @@ mod tests {
             component: "Users/Index",
             base: empty_base(json!({"users": []})),
             lazies: HashMap::new(),
+            once: HashMap::new(),
             deferreds,
             merges: HashSet::new(),
             shared: None,
@@ -390,6 +418,7 @@ mod tests {
             component: "Users/Index",
             base: empty_base(json!({"users": []})),
             lazies: HashMap::new(),
+            once: HashMap::new(),
             deferreds,
             merges: HashSet::new(),
             shared: None,
@@ -408,6 +437,7 @@ mod tests {
             component: "X",
             base: empty_base(json!({"users": "base-wins"})),
             lazies: HashMap::new(),
+            once: HashMap::new(),
             deferreds: HashMap::new(),
             merges: HashSet::new(),
             shared: Some(shared),
@@ -429,6 +459,7 @@ mod tests {
             component: "X",
             base: empty_base(json!({"notifications": ["a"]})),
             lazies: HashMap::new(),
+            once: HashMap::new(),
             deferreds: HashMap::new(),
             merges,
             shared: None,
@@ -465,6 +496,7 @@ mod tests {
             component: "Users/Index",
             base,
             lazies: HashMap::new(),
+            once: HashMap::new(),
             deferreds: HashMap::new(),
             merges: HashSet::new(),
             shared: None,
@@ -555,6 +587,7 @@ mod tests {
             component: "X",
             base,
             lazies: HashMap::new(),
+            once: HashMap::new(),
             deferreds: HashMap::new(),
             merges: HashSet::new(),
             shared: None,
@@ -578,6 +611,7 @@ mod tests {
             component: "Page",
             base,
             lazies: HashMap::new(),
+            once: HashMap::new(),
             deferreds: HashMap::new(),
             merges: HashSet::new(),
             shared: None,
@@ -597,6 +631,7 @@ mod tests {
             component: "Page",
             base: empty_base(json!({"a": 1, "b": 2, "c": 3})),
             lazies: HashMap::new(),
+            once: HashMap::new(),
             deferreds: HashMap::new(),
             merges: HashSet::new(),
             shared: None,
@@ -604,5 +639,62 @@ mod tests {
         .await;
         // a: in `only` → kept. b: in both → dropped (except wins). c: not in `only` → dropped.
         assert_eq!(resolved.props, json!({"a": 1}));
+    }
+    #[tokio::test]
+    async fn once_props_resolve_only_when_the_client_needs_a_value() {
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        };
+        for (cached, requested, cache_key, expected_calls) in [
+            (false, None, "org:one", 1),
+            (true, None, "org:one", 0),
+            (true, Some("organisation"), "org:one", 1),
+            (true, Some("other"), "org:one", 0),
+            (true, None, "org:two", 1),
+        ] {
+            let mut req = req_full();
+            req.is_inertia = true;
+            if cached {
+                req.except_once_props.insert("org:one".into());
+            }
+            if let Some(prop) = requested {
+                req.partial_component = Some("Page".into());
+                req.partial_only.insert(prop.into());
+            }
+            let calls = Arc::new(AtomicUsize::new(0));
+            let resolver_calls = calls.clone();
+            let shared = crate::SharedPropsData::new(json!({})).once_as(
+                "organisation",
+                cache_key,
+                move || async move {
+                    resolver_calls.fetch_add(1, Ordering::SeqCst);
+                    json!({"name": "Current organisation"})
+                },
+            );
+            let result = resolve(ResolveInput {
+                req: &req,
+                component: "Page",
+                base: empty_base(json!({})),
+                once: shared.once,
+                lazies: HashMap::new(),
+                deferreds: HashMap::new(),
+                merges: HashSet::new(),
+                shared: None,
+            })
+            .await;
+            assert_eq!(calls.load(Ordering::SeqCst), expected_calls);
+            assert_eq!(
+                result.props.get("organisation").is_some(),
+                expected_calls == 1
+            );
+            assert_eq!(
+                result.once_props.contains_key(cache_key),
+                requested != Some("other")
+            );
+            if let Some(metadata) = result.once_props.get(cache_key) {
+                assert_eq!(metadata.prop, "organisation");
+            }
+        }
     }
 }

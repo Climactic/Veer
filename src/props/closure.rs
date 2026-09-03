@@ -21,6 +21,14 @@ pub struct LazyProp {
     pub closure: LazyClosure,
 }
 
+/// A prop remembered by the client under a stable cache key.
+pub struct OnceProp {
+    /// Client cache key, which may differ from the prop name.
+    pub key: String,
+    /// Evaluated on the first visit and explicit partial refreshes.
+    pub closure: LazyClosure,
+}
+
 /// Deferred prop — first response advertises group; second response (when client asks) resolves.
 pub struct DeferredProp {
     /// Group key under which this deferred prop is advertised in the page object.

@@ -37,7 +37,7 @@ pub(crate) struct InertiaResponseMarker(pub Arc<Mutex<Option<InertiaResponse>>>)
 
 /// Finish the response. Called by the layer with access to per-request state.
 pub(crate) async fn finalize(
-    builder: InertiaResponse,
+    mut builder: InertiaResponse,
     per: &PerRequest,
     req_info: &RequestInfo,
 ) -> Response<Body> {
@@ -56,7 +56,26 @@ pub(crate) async fn finalize(
 
     // Resolve shared + base props.
     let shared = match &cfg.shared {
-        Some(s) => Some(s.shared(req_info).await),
+        Some(s) => {
+            let shared = s.shared(req_info).await;
+            for (key, prop) in shared.once {
+                if builder.base_props.get(&key).is_none()
+                    && !builder.deferreds.contains_key(&key)
+                    && !builder.lazies.contains_key(&key)
+                {
+                    builder.once.entry(key).or_insert(prop);
+                }
+            }
+            for (key, lazy) in shared.lazies {
+                if builder.base_props.get(&key).is_none()
+                    && !builder.deferreds.contains_key(&key)
+                    && !builder.once.contains_key(&key)
+                {
+                    builder.lazies.entry(key).or_insert(lazy);
+                }
+            }
+            Some(shared.value)
+        }
         None => None,
     };
 
@@ -90,6 +109,7 @@ pub(crate) async fn finalize(
         base: base_serialized,
         lazies: builder.lazies,
         deferreds: builder.deferreds,
+        once: builder.once,
         merges: builder.merges,
         shared: Some(SerializedBase {
             value: shared_value,
@@ -109,6 +129,7 @@ pub(crate) async fn finalize(
     page.clear_history = builder.clear_history;
     page.merge_props = resolved.merge_props;
     page.deferred_props = resolved.deferred_props;
+    page.once_props = resolved.once_props;
     // Combine builder-attached reset keys with any the client signaled via
     // `X-Inertia-Reset`, deduped.
     let mut reset = builder.reset_merge_props.clone();

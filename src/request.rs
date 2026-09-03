@@ -27,6 +27,8 @@ pub struct RequestInfo {
     pub partial_except: HashSet<String>,
     /// Keys the client wants reset (clear merge state for these).
     pub reset: HashSet<String>,
+    /// Once-prop cache keys already available in the client.
+    pub except_once_props: HashSet<String>,
     extensions: Extensions,
 }
 
@@ -71,6 +73,7 @@ impl RequestInfo {
             partial_only: split_csv(headers, &crate::headers::X_INERTIA_PARTIAL_DATA),
             partial_except: split_csv(headers, &crate::headers::X_INERTIA_PARTIAL_EXCEPT),
             reset: split_csv(headers, &crate::headers::X_INERTIA_RESET),
+            except_once_props: split_csv(headers, &crate::headers::X_INERTIA_EXCEPT_ONCE_PROPS),
             extensions: Extensions::new(),
         }
     }
