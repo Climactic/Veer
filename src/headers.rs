@@ -18,6 +18,9 @@ pub const X_INERTIA_PARTIAL_EXCEPT: HeaderName =
     HeaderName::from_static("x-inertia-partial-except");
 /// Indicates the client wants the server to reset specific merged props.
 pub const X_INERTIA_RESET: HeaderName = HeaderName::from_static("x-inertia-reset");
+/// Whether an infinite-scroll response should append or prepend its items.
+pub const X_INERTIA_INFINITE_SCROLL_MERGE_INTENT: HeaderName =
+    HeaderName::from_static("x-inertia-infinite-scroll-merge-intent");
 /// Once-prop cache keys already held by the client.
 pub const X_INERTIA_EXCEPT_ONCE_PROPS: HeaderName =
     HeaderName::from_static("x-inertia-except-once-props");

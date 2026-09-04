@@ -141,6 +141,24 @@ pub(crate) async fn finalize(
     reset.sort();
     page.reset_merge_props = reset;
 
+    for (key, mut metadata) in builder.scrolls {
+        if page.props.get(&key).is_none() {
+            continue;
+        }
+        metadata.reset = page.reset_merge_props.contains(&key);
+        if !metadata.reset {
+            let path = format!("{key}.data");
+            if req_info.prepend_scroll {
+                page.prepend_props.push(path);
+            } else {
+                page.merge_props.push(path);
+            }
+        }
+        page.scroll_props.insert(key, metadata);
+    }
+    page.merge_props.sort();
+    page.prepend_props.sort();
+
     // Build response based on decision.
     let response = match decision {
         ResponseShape::Json => {

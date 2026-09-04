@@ -96,7 +96,7 @@ pub use config::InertiaConfig;
 pub use csrf::CsrfTokens;
 pub use error::VeerError;
 pub use inertia::Inertia;
-pub use page::PageObject;
+pub use page::{PageObject, ScrollMetadata, ScrollPage};
 pub use props::{Always, Merge};
 pub use request::RequestInfo;
 pub use response::InertiaResponse;

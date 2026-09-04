@@ -13,6 +13,7 @@ pub struct InertiaResponse {
     pub(crate) lazies: HashMap<String, LazyProp>,
     pub(crate) deferreds: HashMap<String, DeferredProp>,
     pub(crate) merges: HashSet<String>,
+    pub(crate) scrolls: HashMap<String, crate::page::ScrollMetadata>,
     pub(crate) encrypt_history: bool,
     pub(crate) clear_history: bool,
     pub(crate) reset_merge_props: Vec<String>,
@@ -30,6 +31,7 @@ impl InertiaResponse {
             lazies: HashMap::new(),
             deferreds: HashMap::new(),
             merges: HashSet::new(),
+            scrolls: HashMap::new(),
             encrypt_history: false,
             clear_history: false,
             reset_merge_props: Vec::new(),
@@ -119,6 +121,16 @@ impl InertiaResponse {
     /// Mark a top-level key as merge-mode (client merges into existing state).
     pub fn merge(mut self, key: impl Into<String>) -> Self {
         self.merges.insert(key.into());
+        self
+    }
+
+    /// Mark a paginated prop for Inertia's InfiniteScroll component.
+    ///
+    /// The prop must contain a `data` array. Its items are appended or prepended
+    /// according to the client's merge-intent header; other fields are replaced.
+    /// An `X-Inertia-Reset` request replaces the array and resets scroll state.
+    pub fn scroll(mut self, key: impl Into<String>, metadata: crate::page::ScrollMetadata) -> Self {
+        self.scrolls.insert(key.into(), metadata);
         self
     }
 

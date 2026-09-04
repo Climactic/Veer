@@ -426,6 +426,8 @@ export interface PageObject<P = Pages> {
   encryptHistory?: boolean;
   clearHistory?: boolean;
   mergeProps?: string[];
+  prependProps?: string[];
+  scrollProps?: Record<string, { pageName: string; currentPage: number | string; previousPage: number | string | null; nextPage: number | string | null; reset: boolean }>;
   resetMergeProps?: string[];
   deferredProps?: Record<string, string[]>;
   onceProps?: Record<string, { prop: string }>;

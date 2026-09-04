@@ -26,6 +26,12 @@ pub struct PageObject {
     /// Keys whose values should merge into the client's existing prop state.
     #[serde(rename = "mergeProps", skip_serializing_if = "Vec::is_empty")]
     pub merge_props: Vec<String>,
+    /// Array paths to prepend when loading an earlier scroll page.
+    #[serde(rename = "prependProps", skip_serializing_if = "Vec::is_empty")]
+    pub prepend_props: Vec<String>,
+    /// Pagination metadata consumed by Inertia's InfiniteScroll component.
+    #[serde(rename = "scrollProps", skip_serializing_if = "BTreeMap::is_empty")]
+    pub scroll_props: BTreeMap<String, ScrollMetadata>,
     /// Keys whose merge state the server is asking the client to reset.
     #[serde(rename = "resetMergeProps", skip_serializing_if = "Vec::is_empty")]
     pub reset_merge_props: Vec<String>,
@@ -42,6 +48,61 @@ pub struct PageObject {
 pub struct OncePropMetadata {
     /// Name of the prop containing the remembered value.
     pub prop: String,
+}
+
+/// A numbered page or an opaque cursor for an infinite-scroll prop.
+#[derive(Debug, Clone, Serialize)]
+#[serde(untagged)]
+pub enum ScrollPage {
+    /// A one-based page number.
+    Number(u32),
+    /// An opaque database cursor.
+    Cursor(String),
+}
+
+impl From<u32> for ScrollPage {
+    fn from(value: u32) -> Self {
+        Self::Number(value)
+    }
+}
+
+impl From<String> for ScrollPage {
+    fn from(value: String) -> Self {
+        Self::Cursor(value)
+    }
+}
+
+/// Page boundaries supplied by the application's database paginator.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScrollMetadata {
+    /// Query-string parameter used to request a page.
+    pub page_name: String,
+    /// Page represented by this response.
+    pub current_page: ScrollPage,
+    /// Previous page, or `None` at the start.
+    pub previous_page: Option<ScrollPage>,
+    /// Next page, or `None` at the end.
+    pub next_page: Option<ScrollPage>,
+    pub(crate) reset: bool,
+}
+
+impl ScrollMetadata {
+    /// Create metadata using either numbered pages or string cursors.
+    pub fn new<P: Into<ScrollPage>>(
+        page_name: impl Into<String>,
+        current_page: P,
+        previous_page: Option<P>,
+        next_page: Option<P>,
+    ) -> Self {
+        Self {
+            page_name: page_name.into(),
+            current_page: current_page.into(),
+            previous_page: previous_page.map(Into::into),
+            next_page: next_page.map(Into::into),
+            reset: false,
+        }
+    }
 }
 
 fn is_false(b: &bool) -> bool {
@@ -64,6 +125,8 @@ impl PageObject {
             encrypt_history: false,
             clear_history: false,
             merge_props: Vec::new(),
+            prepend_props: Vec::new(),
+            scroll_props: BTreeMap::new(),
             reset_merge_props: Vec::new(),
             deferred_props: BTreeMap::new(),
             once_props: BTreeMap::new(),

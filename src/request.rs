@@ -27,6 +27,8 @@ pub struct RequestInfo {
     pub partial_except: HashSet<String>,
     /// Keys the client wants reset (clear merge state for these).
     pub reset: HashSet<String>,
+    /// True when InfiniteScroll is loading an earlier page.
+    pub prepend_scroll: bool,
     /// Once-prop cache keys already available in the client.
     pub except_once_props: HashSet<String>,
     extensions: Extensions,
@@ -73,6 +75,10 @@ impl RequestInfo {
             partial_only: split_csv(headers, &crate::headers::X_INERTIA_PARTIAL_DATA),
             partial_except: split_csv(headers, &crate::headers::X_INERTIA_PARTIAL_EXCEPT),
             reset: split_csv(headers, &crate::headers::X_INERTIA_RESET),
+            prepend_scroll: headers
+                .get(&crate::headers::X_INERTIA_INFINITE_SCROLL_MERGE_INTENT)
+                .and_then(|value| value.to_str().ok())
+                == Some("prepend"),
             except_once_props: split_csv(headers, &crate::headers::X_INERTIA_EXCEPT_ONCE_PROPS),
             extensions: Extensions::new(),
         }

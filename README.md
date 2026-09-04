@@ -18,6 +18,23 @@ Build modern single-page apps in React, Vue, or Svelte — without writing a JSO
 
 </div>
 
+### Infinite scrolling
+
+Return a paginated prop with a `data` array and mark it with scroll metadata:
+
+```rust
+use veer::ScrollMetadata;
+
+inertia.render("Users/Index", serde_json::json!({
+    "users": { "data": users, "total": total }
+})).scroll("users", ScrollMetadata::new("page", page, previous_page, next_page))
+```
+
+Wrap the items in the official `<InfiniteScroll data="users">` client component.
+Veer emits `scrollProps` and merges `users.data` in the requested direction.
+Use the client's `reset: ['users']` visit option when changing filters. Database
+filtering, counts, and page boundaries remain the application's responsibility.
+
 ## 📖 Table of Contents
 
 - ✨ [What is Inertia, and why a Rust adapter](#-what-is-inertia-and-why-a-rust-adapter)
