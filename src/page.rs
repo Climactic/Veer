@@ -29,6 +29,9 @@ pub struct PageObject {
     /// Array paths to prepend when loading an earlier scroll page.
     #[serde(rename = "prependProps", skip_serializing_if = "Vec::is_empty")]
     pub prepend_props: Vec<String>,
+    /// Item identity paths used to update matching items instead of duplicating them.
+    #[serde(rename = "matchPropsOn", skip_serializing_if = "Vec::is_empty")]
+    pub match_props_on: Vec<String>,
     /// Pagination metadata consumed by Inertia's InfiniteScroll component.
     #[serde(rename = "scrollProps", skip_serializing_if = "BTreeMap::is_empty")]
     pub scroll_props: BTreeMap<String, ScrollMetadata>,
@@ -85,6 +88,8 @@ pub struct ScrollMetadata {
     /// Next page, or `None` at the end.
     pub next_page: Option<ScrollPage>,
     pub(crate) reset: bool,
+    #[serde(skip)]
+    pub(crate) match_on: Option<String>,
 }
 
 impl ScrollMetadata {
@@ -101,7 +106,14 @@ impl ScrollMetadata {
             previous_page: previous_page.map(Into::into),
             next_page: next_page.map(Into::into),
             reset: false,
+            match_on: None,
         }
+    }
+
+    /// Match existing items by this field when merging refreshed scroll data.
+    pub fn match_on(mut self, field: impl Into<String>) -> Self {
+        self.match_on = Some(field.into());
+        self
     }
 }
 
@@ -126,6 +138,7 @@ impl PageObject {
             clear_history: false,
             merge_props: Vec::new(),
             prepend_props: Vec::new(),
+            match_props_on: Vec::new(),
             scroll_props: BTreeMap::new(),
             reset_merge_props: Vec::new(),
             deferred_props: BTreeMap::new(),

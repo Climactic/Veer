@@ -17,7 +17,7 @@ async fn response(headers: &[(&str, &str)]) -> Value {
                     )
                     .scroll(
                         "users",
-                        ScrollMetadata::new("page", 2_u32, Some(1), Some(3)),
+                        ScrollMetadata::new("page", 2_u32, Some(1), Some(3)).match_on("id"),
                     )
             }),
         )
@@ -45,6 +45,7 @@ async fn response(headers: &[(&str, &str)]) -> Value {
 async fn scroll_metadata_and_append_path_are_emitted() {
     let page = response(&[]).await;
     assert_eq!(page["mergeProps"], json!(["users.data"]));
+    assert_eq!(page["matchPropsOn"], json!(["users.data.id"]));
     assert_eq!(
         page["scrollProps"]["users"],
         json!({
@@ -63,6 +64,7 @@ async fn scroll_previous_pages_prepend() {
     ])
     .await;
     assert_eq!(page["prependProps"], json!(["users.data"]));
+    assert_eq!(page["matchPropsOn"], json!(["users.data.id"]));
     assert!(page.get("mergeProps").is_none());
 }
 
@@ -76,6 +78,7 @@ async fn resetting_scroll_replaces_data_instead_of_merging() {
     ])
     .await;
     assert_eq!(page["scrollProps"]["users"]["reset"], true);
+    assert!(page.get("matchPropsOn").is_none());
     assert!(page.get("mergeProps").is_none());
     assert!(page.get("prependProps").is_none());
 }

@@ -31,6 +31,8 @@ inertia.render("Users/Index", serde_json::json!({
 ```
 
 Wrap the items in the official `<InfiniteScroll data="users">` client component.
+Use `ScrollMetadata::new(...).match_on("id")` when refreshed pages may contain
+already-loaded items, such as a list that polls for status updates.
 Veer emits `scrollProps` and merges `users.data` in the requested direction.
 Use the client's `reset: ['users']` visit option when changing filters. Reset
 visits are partial reloads, so include any other props that must refresh (such as

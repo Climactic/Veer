@@ -148,6 +148,9 @@ pub(crate) async fn finalize(
         metadata.reset = page.reset_merge_props.contains(&key);
         if !metadata.reset {
             let path = format!("{key}.data");
+            if let Some(field) = &metadata.match_on {
+                page.match_props_on.push(format!("{path}.{field}"));
+            }
             if req_info.prepend_scroll {
                 page.prepend_props.push(path);
             } else {
