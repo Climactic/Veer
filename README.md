@@ -32,7 +32,9 @@ inertia.render("Users/Index", serde_json::json!({
 
 Wrap the items in the official `<InfiniteScroll data="users">` client component.
 Veer emits `scrollProps` and merges `users.data` in the requested direction.
-Use the client's `reset: ['users']` visit option when changing filters. Database
+Use the client's `reset: ['users']` visit option when changing filters. Reset
+visits are partial reloads, so include any other props that must refresh (such as
+filters, counts, errors, or flash messages) in the visit's `only` option. Database
 filtering, counts, and page boundaries remain the application's responsibility.
 
 ## 📖 Table of Contents
