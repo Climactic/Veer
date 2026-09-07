@@ -672,6 +672,69 @@ mod multipart_tests {
     }
 
     #[tokio::test]
+    async fn multipart_with_indexed_files_deserializes_into_vec() {
+        #[derive(Deserialize)]
+        struct UploadDocuments {
+            files: Vec<UploadedFile>,
+        }
+
+        let cfg = InertiaConfig::new().version(|| "v1".into());
+        let app = Router::new()
+            .route(
+                "/documents",
+                post(
+                    |i: Inertia, InertiaForm(form): InertiaForm<UploadDocuments>| async move {
+                        i.render(
+                            "documents/created",
+                            json!({
+                                "filenames": form.files.into_iter().map(|file| file.filename).collect::<Vec<_>>(),
+                            }),
+                        )
+                    },
+                ),
+            )
+            .layer(InertiaLayer::new(cfg));
+
+        let boundary = "veer-test-indexed-files";
+        let body = multipart_body(
+            boundary,
+            &[
+                Part::File {
+                    name: "files[0]",
+                    filename: "first.pdf",
+                    content_type: "application/pdf",
+                    bytes: b"first",
+                },
+                Part::File {
+                    name: "files[1]",
+                    filename: "second.pdf",
+                    content_type: "application/pdf",
+                    bytes: b"second",
+                },
+            ],
+        );
+        let request = http::Request::builder()
+            .method("POST")
+            .uri("/documents")
+            .header(
+                "content-type",
+                format!("multipart/form-data; boundary={boundary}"),
+            )
+            .header("x-inertia", "true")
+            .header("x-inertia-version", "v1")
+            .body(axum::body::Body::from(body))
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+
+        assert_eq!(response.status(), 200);
+        let page = body_json(response).await;
+        assert_eq!(
+            page["props"]["filenames"],
+            json!(["first.pdf", "second.pdf"])
+        );
+    }
+
+    #[tokio::test]
     async fn multipart_text_only_still_works() {
         // A multipart submission with no file fields should still deserialize
         // text fields correctly.

@@ -18,6 +18,27 @@ Build modern single-page apps in React, Vue, or Svelte — without writing a JSO
 
 </div>
 
+### Infinite scrolling
+
+Return a paginated prop with a `data` array and mark it with scroll metadata:
+
+```rust
+use veer::ScrollMetadata;
+
+inertia.render("Users/Index", serde_json::json!({
+    "users": { "data": users, "total": total }
+})).scroll("users", ScrollMetadata::new("page", page, previous_page, next_page))
+```
+
+Wrap the items in the official `<InfiniteScroll data="users">` client component.
+Use `ScrollMetadata::new(...).match_on("id")` when refreshed pages may contain
+already-loaded items, such as a list that polls for status updates.
+Veer emits `scrollProps` and merges `users.data` in the requested direction.
+Use the client's `reset: ['users']` visit option when changing filters. Reset
+visits are partial reloads, so include any other props that must refresh (such as
+filters, counts, errors, or flash messages) in the visit's `only` option. Database
+filtering, counts, and page boundaries remain the application's responsibility.
+
 ## 📖 Table of Contents
 
 - ✨ [What is Inertia, and why a Rust adapter](#-what-is-inertia-and-why-a-rust-adapter)
@@ -217,16 +238,42 @@ inertia
 ```rust,ignore
 use veer::shared::shared_props_fn;
 
+let app_context = app_context.clone();
 let cfg = InertiaConfig::new()
-    .shared(shared_props_fn(|_req| async move {
-        serde_json::json!({
-            "auth": { "user": current_user().await },
-            "app": { "name": "Acme" },
-        })
+    .shared(shared_props_fn(move |req| {
+        let app_context = app_context.clone();
+        let session = req.extension::<tower_sessions::Session>().cloned();
+        async move {
+            let user = match session {
+                Some(session) => current_user(&app_context, &session).await,
+                None => None,
+            };
+            serde_json::json!({
+                "auth": { "user": user },
+                "app": { "name": "Acme" },
+            })
+        }
     }));
 ```
 
 Shared props merge under per-response props (handler props win on key collision).
+Request extensions installed by outer middleware, including a
+`tower_sessions::Session`, are available through `RequestInfo::extension`.
+
+Return `SharedPropsData` to attach shared props that are loaded only on demand:
+
+```rust,ignore
+use veer::SharedPropsData;
+
+SharedPropsData::new(serde_json::json!({ "unread_count": unread_count }))
+    .lazy("notifications", move || async move {
+        serde_json::json!(load_notifications(&client).await)
+    })
+```
+
+The lazy closure runs only when a matching partial reload explicitly requests
+its key. Initial visits and unrelated reloads do not execute it. Page values
+and page lazy/deferred props take precedence over shared lazy props.
 
 </details>
 
@@ -399,6 +446,17 @@ pub struct UsersIndexProps {
     pub users: Vec<User>,
 }
 veer::register_page!(UsersIndexProps, "Users/Index");
+```
+
+Register action payloads or other standalone frontend contracts separately:
+
+```rust,ignore
+#[derive(serde::Deserialize, ts_rs::TS)]
+struct UpdateProfileForm {
+    display_name: String,
+}
+
+veer::register_type!(UpdateProfileForm);
 ```
 
 Then build your router using `veer::Router` — same fluent API as `axum::Router`, but every route gets a name and method so the codegen knows about it:

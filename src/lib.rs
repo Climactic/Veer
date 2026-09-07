@@ -96,13 +96,13 @@ pub use config::InertiaConfig;
 pub use csrf::CsrfTokens;
 pub use error::VeerError;
 pub use inertia::Inertia;
-pub use page::PageObject;
+pub use page::{PageObject, ScrollMetadata, ScrollPage};
 pub use props::{Always, Merge};
 pub use request::RequestInfo;
 pub use response::InertiaResponse;
 pub use root_view::{MinimalRootView, RootView, RootViewContext, ViteManifest, ViteRootView};
 pub use session::{Flash, SessionStore};
-pub use shared::SharedProps;
+pub use shared::{SharedProps, SharedPropsData};
 pub use ssr::{SsrClient, SsrPayload};
 
 #[cfg(feature = "axum")]

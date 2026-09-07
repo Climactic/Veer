@@ -1,6 +1,6 @@
 //! The response value handlers return.
 
-use crate::props::closure::{DeferredProp, LazyProp};
+use crate::props::closure::{DeferredProp, LazyProp, OnceProp};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
@@ -9,9 +9,11 @@ use std::future::Future;
 pub struct InertiaResponse {
     pub(crate) component: String,
     pub(crate) base_props: Value,
+    pub(crate) once: HashMap<String, OnceProp>,
     pub(crate) lazies: HashMap<String, LazyProp>,
     pub(crate) deferreds: HashMap<String, DeferredProp>,
     pub(crate) merges: HashSet<String>,
+    pub(crate) scrolls: HashMap<String, crate::page::ScrollMetadata>,
     pub(crate) encrypt_history: bool,
     pub(crate) clear_history: bool,
     pub(crate) reset_merge_props: Vec<String>,
@@ -25,9 +27,11 @@ impl InertiaResponse {
         Self {
             component: component.into(),
             base_props,
+            once: HashMap::new(),
             lazies: HashMap::new(),
             deferreds: HashMap::new(),
             merges: HashSet::new(),
+            scrolls: HashMap::new(),
             encrypt_history: false,
             clear_history: false,
             reset_merge_props: Vec::new(),
@@ -35,6 +39,37 @@ impl InertiaResponse {
             redirect: None,
             pending_flash: Default::default(),
         }
+    }
+
+    /// Remember a prop across visits until the client explicitly requests it again.
+    pub fn once<F, Fut>(self, key: impl Into<String>, f: F) -> Self
+    where
+        F: FnOnce() -> Fut + Send + 'static,
+        Fut: Future<Output = Value> + Send + 'static,
+    {
+        let key = key.into();
+        self.once_as(key.clone(), key, f)
+    }
+
+    /// Remember a prop under a custom key, for example one scoped to an organisation.
+    pub fn once_as<F, Fut>(
+        mut self,
+        prop: impl Into<String>,
+        cache_key: impl Into<String>,
+        f: F,
+    ) -> Self
+    where
+        F: FnOnce() -> Fut + Send + 'static,
+        Fut: Future<Output = Value> + Send + 'static,
+    {
+        self.once.insert(
+            prop.into(),
+            OnceProp {
+                key: cache_key.into(),
+                closure: Box::new(|| Box::pin(f())),
+            },
+        );
+        self
     }
 
     /// Attach a lazy prop (default-excluded; included only on partial reload that names it).
@@ -86,6 +121,16 @@ impl InertiaResponse {
     /// Mark a top-level key as merge-mode (client merges into existing state).
     pub fn merge(mut self, key: impl Into<String>) -> Self {
         self.merges.insert(key.into());
+        self
+    }
+
+    /// Mark a paginated prop for Inertia's InfiniteScroll component.
+    ///
+    /// The prop must contain a `data` array. Its items are appended or prepended
+    /// according to the client's merge-intent header; other fields are replaced.
+    /// An `X-Inertia-Reset` request replaces the array and resets scroll state.
+    pub fn scroll(mut self, key: impl Into<String>, metadata: crate::page::ScrollMetadata) -> Self {
+        self.scrolls.insert(key.into(), metadata);
         self
     }
 

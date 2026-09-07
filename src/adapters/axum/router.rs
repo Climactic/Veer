@@ -133,7 +133,7 @@ where
     /// Same-path multi-method calls (e.g. GET and POST on `/todos`) are
     /// merged into one [`MethodRouter`] — no extra ceremony required.
     pub fn named_route<H, T>(
-        mut self,
+        self,
         method: Method,
         name: &'static str,
         path: &'static str,
@@ -143,13 +143,26 @@ where
         H: Handler<T, S>,
         T: 'static,
     {
-        let mr = method.into_router(handler);
+        self.named_method_router(method, name, path, method.into_router(handler))
+    }
+
+    /// Mount a preconfigured named method router and record it for TypeScript bindings.
+    ///
+    /// This is useful when one generated route needs an Axum-specific setting such as
+    /// a larger request body limit.
+    pub fn named_method_router(
+        mut self,
+        method: Method,
+        name: &'static str,
+        path: &'static str,
+        method_router: MethodRouter<S>,
+    ) -> Self {
         match self.routes.swap_remove(path) {
             Some(prev) => {
-                self.routes.insert(path, prev.merge(mr));
+                self.routes.insert(path, prev.merge(method_router));
             }
             None => {
-                self.routes.insert(path, mr);
+                self.routes.insert(path, method_router);
             }
         }
         self.names.push(NamedRoute {

@@ -101,8 +101,9 @@ where
                 .await
                 .map_err(|e| InertiaFormRejection::MultipartTransport(e.to_string()))?;
             let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-            map.insert(
-                name,
+            insert_multipart_value(
+                &mut map,
+                &name,
                 serde_json::json!({
                     "__veer_uploaded_file__": true,
                     "filename": filename,
@@ -115,11 +116,50 @@ where
                 .text()
                 .await
                 .map_err(|e| InertiaFormRejection::MultipartTransport(e.to_string()))?;
-            map.insert(name, serde_json::Value::String(text));
+            insert_multipart_value(&mut map, &name, serde_json::Value::String(text));
         }
     }
 
     Ok(serde_json::Value::Object(map))
+}
+
+#[cfg(feature = "multipart")]
+fn insert_multipart_value(
+    map: &mut serde_json::Map<String, serde_json::Value>,
+    field_name: &str,
+    value: serde_json::Value,
+) {
+    let Some((name, index)) = multipart_array_field(field_name) else {
+        map.insert(field_name.to_string(), value);
+        return;
+    };
+
+    let values = map
+        .entry(name.to_string())
+        .or_insert_with(|| serde_json::Value::Array(Vec::new()));
+    let serde_json::Value::Array(values) = values else {
+        return;
+    };
+
+    if let Some(index) = index {
+        values.resize(index + 1, serde_json::Value::Null);
+        values[index] = value;
+    } else {
+        values.push(value);
+    }
+}
+
+#[cfg(feature = "multipart")]
+fn multipart_array_field(field_name: &str) -> Option<(&str, Option<usize>)> {
+    let (name, index) = field_name.rsplit_once('[')?;
+    let index = index.strip_suffix(']')?;
+    if name.is_empty() {
+        return None;
+    }
+    if index.is_empty() {
+        return Some((name, None));
+    }
+    Some((name, Some(index.parse().ok()?)))
 }
 
 /// Rejection from [`InertiaForm`]. Renders as a `4xx` HTTP response.
