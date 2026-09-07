@@ -26,6 +26,8 @@ pub struct ResolveInput<'a> {
     pub component: &'a str,
     /// Already-serialized base props from the user's struct (via custom serializer that records tags).
     pub base: SerializedBase,
+    /// Ordinary closure props, resolved only when included in this response.
+    pub ordinary: HashMap<String, LazyProp>,
     /// Builder-attached lazy/optional props by top-level key (both routes share this map).
     pub lazies: HashMap<String, LazyProp>,
     /// Props remembered by the client.
@@ -157,6 +159,7 @@ pub async fn resolve(input: ResolveInput<'_>) -> ResolvedProps {
         req,
         component,
         base,
+        ordinary,
         lazies,
         once,
         deferreds,
@@ -178,6 +181,14 @@ pub async fn resolve(input: ResolveInput<'_>) -> ResolvedProps {
     let except: &HashSet<String> = &req.partial_except;
 
     let mut deferred_groups: BTreeMap<String, Vec<String>> = BTreeMap::new();
+
+    for (key, prop) in ordinary {
+        if req.wants_prop(component, &key) || base.always_paths.contains(&format!("/{key}")) {
+            set_top(&mut tree, &key, (prop.closure)().await);
+        } else {
+            remove_top(&mut tree, &key);
+        }
+    }
 
     let mut once_props = BTreeMap::new();
     for (key, prop) in once {
@@ -338,6 +349,7 @@ mod tests {
             req: &req,
             component: "Users/Index",
             base: empty_base(json!({"users": [1,2]})),
+            ordinary: HashMap::new(),
             lazies,
             once: HashMap::new(),
             deferreds: HashMap::new(),
@@ -362,6 +374,7 @@ mod tests {
             req: &req,
             component: "Users/Index",
             base: empty_base(json!({"users": [1,2]})),
+            ordinary: HashMap::new(),
             lazies,
             once: HashMap::new(),
             deferreds: HashMap::new(),
@@ -388,6 +401,7 @@ mod tests {
             req: &req,
             component: "Users/Index",
             base: empty_base(json!({"users": []})),
+            ordinary: HashMap::new(),
             lazies: HashMap::new(),
             once: HashMap::new(),
             deferreds,
@@ -417,6 +431,7 @@ mod tests {
             req: &req,
             component: "Users/Index",
             base: empty_base(json!({"users": []})),
+            ordinary: HashMap::new(),
             lazies: HashMap::new(),
             once: HashMap::new(),
             deferreds,
@@ -436,6 +451,7 @@ mod tests {
             req: &req,
             component: "X",
             base: empty_base(json!({"users": "base-wins"})),
+            ordinary: HashMap::new(),
             lazies: HashMap::new(),
             once: HashMap::new(),
             deferreds: HashMap::new(),
@@ -458,6 +474,7 @@ mod tests {
             req: &req,
             component: "X",
             base: empty_base(json!({"notifications": ["a"]})),
+            ordinary: HashMap::new(),
             lazies: HashMap::new(),
             once: HashMap::new(),
             deferreds: HashMap::new(),
@@ -495,6 +512,7 @@ mod tests {
             req: &req,
             component: "Users/Index",
             base,
+            ordinary: HashMap::new(),
             lazies: HashMap::new(),
             once: HashMap::new(),
             deferreds: HashMap::new(),
@@ -586,6 +604,7 @@ mod tests {
             req: &req,
             component: "X",
             base,
+            ordinary: HashMap::new(),
             lazies: HashMap::new(),
             once: HashMap::new(),
             deferreds: HashMap::new(),
@@ -610,6 +629,7 @@ mod tests {
             req: &req,
             component: "Page",
             base,
+            ordinary: HashMap::new(),
             lazies: HashMap::new(),
             once: HashMap::new(),
             deferreds: HashMap::new(),
@@ -630,6 +650,7 @@ mod tests {
             req: &req,
             component: "Page",
             base: empty_base(json!({"a": 1, "b": 2, "c": 3})),
+            ordinary: HashMap::new(),
             lazies: HashMap::new(),
             once: HashMap::new(),
             deferreds: HashMap::new(),
@@ -677,6 +698,7 @@ mod tests {
                 component: "Page",
                 base: empty_base(json!({})),
                 once: shared.once,
+                ordinary: HashMap::new(),
                 lazies: HashMap::new(),
                 deferreds: HashMap::new(),
                 merges: HashSet::new(),

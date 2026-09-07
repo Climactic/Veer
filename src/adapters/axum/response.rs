@@ -14,6 +14,69 @@ use axum::response::IntoResponse;
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
 
+pub(crate) type TryProp = Box<
+    dyn FnOnce() -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<
+                        Output = Result<(Value, Option<crate::ScrollMetadata>), Response<Body>>,
+                    > + Send,
+            >,
+        > + Send,
+>;
+
+impl InertiaResponse {
+    /// Resolve a fallible ordinary prop only when included. Errors become the
+    /// application's Axum response, rather than an invalid or null page prop.
+    pub fn try_prop<F, Fut, T, E>(mut self, key: impl Into<String>, f: F) -> Self
+    where
+        F: FnOnce() -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = Result<T, E>> + Send + 'static,
+        T: serde::Serialize,
+        E: IntoResponse,
+    {
+        self.try_props.insert(
+            key.into(),
+            Box::new(|| {
+                Box::pin(async move {
+                    let value = f().await.map_err(IntoResponse::into_response)?;
+                    let value = serde_json::to_value(value).map_err(|error| {
+                        tracing::error!(%error, "veer: failed to serialize prop");
+                        StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                    })?;
+                    Ok((value, None))
+                })
+            }),
+        );
+        self
+    }
+
+    /// Resolve an ordinary paginated prop and its scroll metadata together.
+    /// Excluded props execute neither the data query nor the pagination query.
+    pub fn try_scroll_prop<F, Fut, T, E, M>(mut self, key: impl Into<String>, f: F) -> Self
+    where
+        F: FnOnce() -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = Result<(T, M), E>> + Send + 'static,
+        T: serde::Serialize,
+        E: IntoResponse,
+        M: Into<Option<crate::ScrollMetadata>>,
+    {
+        self.try_props.insert(
+            key.into(),
+            Box::new(|| {
+                Box::pin(async move {
+                    let (value, scroll) = f().await.map_err(IntoResponse::into_response)?;
+                    let value = serde_json::to_value(value).map_err(|error| {
+                        tracing::error!(%error, "veer: failed to serialize scroll prop");
+                        StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                    })?;
+                    Ok((value, scroll.into()))
+                })
+            }),
+        );
+        self
+    }
+}
+
 impl IntoResponse for InertiaResponse {
     fn into_response(self) -> Response<Body> {
         // Inertia handle context is recovered via request extensions on the response path
@@ -54,14 +117,69 @@ pub(crate) async fn finalize(
     // Outgoing flash (write later in this function via finish_with_flash).
     let pending_flash = builder.pending_flash.clone();
 
+    // Redirects and asset-version conflicts never send page props. Preserve flash,
+    // but do not invoke display-data resolvers for responses that discard their work.
+    if !matches!(decision, ResponseShape::Html | ResponseShape::Json) {
+        let response = match decision {
+            ResponseShape::SeeOther { location } => {
+                let mut r = Response::new(Body::empty());
+                *r.status_mut() = StatusCode::SEE_OTHER;
+                r.headers_mut().insert(
+                    http::header::LOCATION,
+                    HeaderValue::from_str(&location).unwrap_or(HeaderValue::from_static("/")),
+                );
+                r
+            }
+            ResponseShape::InertiaLocation { location } => {
+                let mut r = Response::new(Body::empty());
+                *r.status_mut() = StatusCode::CONFLICT;
+                r.headers_mut().insert(
+                    &veer_headers::X_INERTIA_LOCATION,
+                    HeaderValue::from_str(&location).unwrap_or(HeaderValue::from_static("/")),
+                );
+                r
+            }
+            ResponseShape::Html | ResponseShape::Json => unreachable!(),
+        };
+        return finish_with_flash(response, pending_flash, per).await;
+    }
+
+    // Fallible ordinary props preserve the application's error response. Pagination
+    // metadata is produced together with its data, so excluded lists do no work.
+    for (key, prop) in std::mem::take(&mut builder.try_props) {
+        // Reserve page-owned keys even when excluded, so shared loaders cannot replace them.
+        builder.base_props[&key] = Value::Null;
+        if req_info.wants_prop(&builder.component, &key) {
+            match prop().await {
+                Ok((value, scroll)) => {
+                    builder.base_props[&key] = value;
+                    if let Some(scroll) = scroll {
+                        builder.scrolls.insert(key, scroll);
+                    }
+                }
+                Err(response) => return finish_with_flash(response, pending_flash, per).await,
+            }
+        }
+    }
+
     // Resolve shared + base props.
     let shared = match &cfg.shared {
         Some(s) => {
             let shared = s.shared(req_info).await;
+            for (key, prop) in shared.props {
+                if builder.base_props.get(&key).is_none()
+                    && !builder.deferreds.contains_key(&key)
+                    && !builder.lazies.contains_key(&key)
+                    && !builder.once.contains_key(&key)
+                {
+                    builder.props.entry(key).or_insert(prop);
+                }
+            }
             for (key, prop) in shared.once {
                 if builder.base_props.get(&key).is_none()
                     && !builder.deferreds.contains_key(&key)
                     && !builder.lazies.contains_key(&key)
+                    && !builder.props.contains_key(&key)
                 {
                     builder.once.entry(key).or_insert(prop);
                 }
@@ -70,6 +188,7 @@ pub(crate) async fn finalize(
                 if builder.base_props.get(&key).is_none()
                     && !builder.deferreds.contains_key(&key)
                     && !builder.once.contains_key(&key)
+                    && !builder.props.contains_key(&key)
                 {
                     builder.lazies.entry(key).or_insert(lazy);
                 }
@@ -107,6 +226,7 @@ pub(crate) async fn finalize(
         req: req_info,
         component: &builder.component,
         base: base_serialized,
+        ordinary: builder.props,
         lazies: builder.lazies,
         deferreds: builder.deferreds,
         once: builder.once,
@@ -231,23 +351,8 @@ pub(crate) async fn finalize(
             );
             r
         }
-        ResponseShape::SeeOther { location } => {
-            let mut r = Response::new(Body::empty());
-            *r.status_mut() = StatusCode::SEE_OTHER;
-            r.headers_mut().insert(
-                http::header::LOCATION,
-                HeaderValue::from_str(&location).unwrap_or(HeaderValue::from_static("/")),
-            );
-            r
-        }
-        ResponseShape::InertiaLocation { location } => {
-            let mut r = Response::new(Body::empty());
-            *r.status_mut() = StatusCode::CONFLICT;
-            r.headers_mut().insert(
-                &veer_headers::X_INERTIA_LOCATION,
-                HeaderValue::from_str(&location).unwrap_or(HeaderValue::from_static("/")),
-            );
-            r
+        ResponseShape::SeeOther { .. } | ResponseShape::InertiaLocation { .. } => {
+            unreachable!("redirects finalized before props")
         }
     };
 

@@ -9,6 +9,9 @@ use std::future::Future;
 pub struct InertiaResponse {
     pub(crate) component: String,
     pub(crate) base_props: Value,
+    pub(crate) props: HashMap<String, LazyProp>,
+    #[cfg(feature = "axum")]
+    pub(crate) try_props: HashMap<String, crate::adapters::axum::response::TryProp>,
     pub(crate) once: HashMap<String, OnceProp>,
     pub(crate) lazies: HashMap<String, LazyProp>,
     pub(crate) deferreds: HashMap<String, DeferredProp>,
@@ -27,6 +30,9 @@ impl InertiaResponse {
         Self {
             component: component.into(),
             base_props,
+            props: HashMap::new(),
+            #[cfg(feature = "axum")]
+            try_props: HashMap::new(),
             once: HashMap::new(),
             lazies: HashMap::new(),
             deferreds: HashMap::new(),
@@ -39,6 +45,23 @@ impl InertiaResponse {
             redirect: None,
             pending_flash: Default::default(),
         }
+    }
+
+    /// Resolve an ordinary prop on full visits and partial reloads that include it.
+    /// Unlike `lazy`/`optional`, this runs on the first visit. Unlike `once`, its
+    /// value is not cached across visits. Unrequested closures are never invoked.
+    pub fn prop<F, Fut>(mut self, key: impl Into<String>, f: F) -> Self
+    where
+        F: FnOnce() -> Fut + Send + 'static,
+        Fut: Future<Output = Value> + Send + 'static,
+    {
+        self.props.insert(
+            key.into(),
+            LazyProp {
+                closure: Box::new(|| Box::pin(f())),
+            },
+        );
+        self
     }
 
     /// Remember a prop across visits until the client explicitly requests it again.

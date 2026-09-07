@@ -11,6 +11,7 @@ use std::sync::Arc;
 /// Shared values and on-demand resolvers, merged underneath page props.
 pub struct SharedPropsData {
     pub(crate) value: Value,
+    pub(crate) props: HashMap<String, LazyProp>,
     pub(crate) once: HashMap<String, OnceProp>,
     pub(crate) lazies: HashMap<String, LazyProp>,
 }
@@ -20,9 +21,27 @@ impl SharedPropsData {
     pub fn new(value: Value) -> Self {
         Self {
             value,
+            props: HashMap::new(),
             once: HashMap::new(),
             lazies: HashMap::new(),
         }
+    }
+
+    /// Resolve an ordinary prop on full visits and partial reloads that include it.
+    /// Unlike `lazy`/`optional`, this runs on the first visit. Unlike `once`, its
+    /// value is not cached across visits. Unrequested closures are never invoked.
+    pub fn prop<F, Fut>(mut self, key: impl Into<String>, f: F) -> Self
+    where
+        F: FnOnce() -> Fut + Send + 'static,
+        Fut: Future<Output = Value> + Send + 'static,
+    {
+        self.props.insert(
+            key.into(),
+            LazyProp {
+                closure: Box::new(|| Box::pin(f())),
+            },
+        );
+        self
     }
 
     /// Remember a prop across visits until the client explicitly requests it again.

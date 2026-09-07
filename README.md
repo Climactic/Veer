@@ -18,6 +18,31 @@ Build modern single-page apps in React, Vue, or Svelte — without writing a JSO
 
 </div>
 
+### Ordinary closure props
+
+Use an ordinary closure when data belongs in the initial page but should not be
+loaded again for partial reloads that exclude it. This implements Inertia's
+[lazy data evaluation](https://inertiajs.com/docs/v3/data-props/partial-reloads#lazy-data-evaluation):
+
+```rust
+inertia.render("Users/Index", serde_json::json!({}))
+    .prop("users", || async { serde_json::json!(load_users().await) })
+    .prop("companies", || async { serde_json::json!(load_companies().await) })
+```
+
+`prop` executes on full visits and when included by a component-matched partial
+reload. It does not cache values across visits. `SharedPropsData::prop` provides
+the same behavior for shared data. `lazy`/`optional` still means explicitly
+requested only; `deferred` still loads in a follow-up request; `once` still adds
+client caching. Page-owned props take precedence over shared props.
+
+With Axum, use `try_prop` for loaders returning `Result<T, E>` where `T: Serialize`
+and `E: IntoResponse`. Errors retain the application's HTTP response. Use
+`try_scroll_prop` for loaders returning `Result<(T, ScrollMetadata), E>` so data
+and its pagination metadata are loaded together only when included. Metadata
+may also be `Option<ScrollMetadata>` for conditionally displayed lists.
+Redirects and asset-version conflict responses do not resolve display props.
+
 ### Infinite scrolling
 
 Return a paginated prop with a `data` array and mark it with scroll metadata:

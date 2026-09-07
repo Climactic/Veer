@@ -103,6 +103,18 @@ impl RequestInfo {
         self.extensions.get::<T>()
     }
 
+    /// Whether an ordinary prop is included in a response for `component`.
+    /// Use this before loading expensive page data. Full visits and component changes
+    /// include all ordinary props; matching partial visits apply `only` and `except`.
+    /// Lazy, deferred, always, and once props have their own resolution rules.
+    pub(crate) fn wants_prop(&self, component: &str, key: &str) -> bool {
+        if !self.is_partial() || self.partial_component.as_deref() != Some(component) {
+            return true;
+        }
+        (self.partial_only.is_empty() || self.partial_only.contains(key))
+            && !self.partial_except.contains(key)
+    }
+
     /// Returns `true` if the request is a partial reload (component header set + only/except non-empty).
     pub fn is_partial(&self) -> bool {
         self.partial_component.is_some()
