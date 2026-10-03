@@ -45,6 +45,8 @@ Brings the protocol surface up to Inertia client 3.8.0 / `inertia-laravel` 3.5.1
 - `Prop` at a nested dot path (`.prop("auth.permissions", …)`).
 - An empty `200` response to an Inertia request redirects back.
 - `HttpSsrClient::timeout` and `HttpSsrClient::health`.
+- A `docs/` folder with one guide per topic; the README is now an overview.
+- `shared_props_fn` returns a value that `InertiaConfig::shared` accepts.
 - `Vary: X-Inertia` on all responses that pass through `InertiaLayer`.
 - Plain handler responses (for example `axum::response::Redirect`) now get the
   version-mismatch 409, fragment redirect and flash carry-over too.
