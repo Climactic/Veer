@@ -99,6 +99,27 @@ impl SessionStore for TowerSessionStore {
             tracing::error!(error = %e, "veer: failed to write flash to tower-sessions");
         }
     }
+
+    async fn previous_url(&self, req: &RequestParts) -> Option<String> {
+        let session = req.extensions.get::<Session>()?;
+        let key = format!("{}_previous_url", self.key);
+        session.get::<String>(&key).await.ok().flatten()
+    }
+
+    async fn store_previous_url(
+        &self,
+        _headers: &mut HeaderMap,
+        req_extensions: &Extensions,
+        url: &str,
+    ) {
+        let Some(session) = req_extensions.get::<Session>() else {
+            return;
+        };
+        let key = format!("{}_previous_url", self.key);
+        if let Err(e) = session.insert(&key, url).await {
+            tracing::error!(error = %e, "veer: failed to write the previous URL to tower-sessions");
+        }
+    }
 }
 
 #[cfg(test)]

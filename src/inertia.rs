@@ -16,6 +16,7 @@ pub struct Inertia {
     pub(crate) config: Arc<InertiaConfig>,
     pub(crate) request: Arc<RequestInfo>,
     pub(crate) incoming_flash: Arc<Flash>,
+    pub(crate) previous_url: Option<String>,
 }
 
 impl Inertia {
@@ -29,6 +30,7 @@ impl Inertia {
             config,
             request: Arc::new(request),
             incoming_flash: Arc::new(incoming_flash),
+            previous_url: None,
         }
     }
 
@@ -92,7 +94,7 @@ impl Inertia {
             .request
             .referer
             .clone()
-            .or_else(|| self.incoming_flash.previous_url.clone())
+            .or_else(|| self.previous_url.clone())
             .unwrap_or_else(|| "/".to_string());
         self.redirect(to)
     }

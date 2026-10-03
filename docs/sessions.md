@@ -13,7 +13,7 @@ let cfg = InertiaConfig::new()
     .session(CookieSessionStore::new(secret)); // at least 32 bytes
 ```
 
-The data is in one cookie (`_veer_flash`), signed with HMAC-SHA256 and verified in constant time. The cookie is `HttpOnly`, `Secure` and `SameSite=Lax`, and lives for 60 seconds.
+The data is in one cookie (`_veer_flash`), signed with HMAC-SHA256 and verified in constant time. The cookie is `HttpOnly`, `Secure` and `SameSite=Lax`, and lives for 60 seconds. The [previous URL](redirects-and-history.md#back) has its own signed cookie (`_veer_previous_url`), which lives for two hours.
 
 - For local HTTP development, call `.secure(false)`.
 - A cookie holds about 4 KB. For large flash data, use `tower-sessions`.
@@ -62,6 +62,8 @@ impl SessionStore for MyStore {
     }
 }
 ```
+
+For [`store_previous_url`](redirects-and-history.md#back), also implement `previous_url` and `store_previous_url`. Their defaults keep nothing.
 
 `Flash` implements `Serialize` and `Deserialize`, so you can store it as JSON. It is `#[non_exhaustive]`; start from `Flash::default()`. `write` gets the response headers (for a cookie) and a copy of the request extensions (for a session handle that a middleware put there).
 

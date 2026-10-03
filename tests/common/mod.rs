@@ -8,6 +8,8 @@ use veer::ssr::{SsrClient, SsrError, SsrPayload};
 #[derive(Clone, Default)]
 pub struct MockSession {
     pub store: Arc<Mutex<Flash>>,
+    #[allow(dead_code)]
+    pub previous_url: Arc<Mutex<Option<String>>>,
 }
 
 #[async_trait]
@@ -19,6 +21,12 @@ impl SessionStore for MockSession {
     async fn write(&self, _h: &mut HeaderMap, _ext: &Extensions, flash: Flash) {
         let mut g = self.store.lock().await;
         *g = flash;
+    }
+    async fn previous_url(&self, _req: &http::request::Parts) -> Option<String> {
+        self.previous_url.lock().await.clone()
+    }
+    async fn store_previous_url(&self, _h: &mut HeaderMap, _ext: &Extensions, url: &str) {
+        *self.previous_url.lock().await = Some(url.to_string());
     }
 }
 

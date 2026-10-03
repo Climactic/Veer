@@ -225,6 +225,9 @@ impl Filter<'_> {
             if always.contains(&path) {
                 return true;
             }
+            // An unselected parent is dropped with its nested `Always` values.
+            // A parent with only some of its fields would replace the client's
+            // copy, because the client replaces top-level props.
             if !self.includes(&path) {
                 return false;
             }
@@ -428,7 +431,17 @@ pub async fn resolve(input: ResolveInput<'_>) -> Result<ResolvedProps, PropError
 
         match loader().await {
             Ok(loaded) => {
-                insert_path(map, &key, loaded.value);
+                // A closure can return `Merge` / `Always` wrappers too.
+                let mut value = loaded.value;
+                let (mut path, mut always, mut merges) =
+                    (key.clone(), HashSet::new(), HashSet::new());
+                strip_sentinels(&mut value, &mut path, &mut always, &mut merges);
+                out.merge_props.extend(
+                    merges
+                        .into_iter()
+                        .filter(|p| !filter.is_reset(p) && filter.emits_metadata(p)),
+                );
+                insert_path(map, &key, value);
                 collect_merge(&mut out);
                 if let Some(metadata) = loaded.scroll {
                     out.scroll_props.insert(
@@ -618,6 +631,8 @@ mod tests {
     async fn always_survives_only_and_except_at_any_depth() {
         let base = json!({"a": 1, "flag": Always(true), "auth": {"user": Always("u"), "x": 1}});
         let r = run(&req_partial(&["a"], &["flag", "auth"]), base, vec![]).await;
+        // An unselected parent is not sent: a partial `auth` would replace the
+        // client's complete one.
         assert_eq!(r.props, json!({"a": 1, "flag": true}));
 
         let base = json!({"a": 1, "auth": {"user": Always("u"), "x": 1}});
@@ -828,6 +843,17 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(r.props, json!({"errors": {}}));
+    }
+
+    #[tokio::test]
+    async fn wrappers_in_a_closure_value_are_stripped() {
+        let props = vec![(
+            "feed",
+            value(json!({"data": Merge(vec![1]), "x": Always(2)})),
+        )];
+        let r = run(&req_full(), json!({}), props).await;
+        assert_eq!(r.props, json!({"feed": {"data": [1], "x": 2}}));
+        assert_eq!(r.merge_props, ["feed.data"]);
     }
 
     #[tokio::test]

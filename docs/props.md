@@ -153,7 +153,7 @@ struct DashboardProps {
 }
 ```
 
-They work at any depth and through any serialization path (structs, `json!`, hand-built values). A nested wrapper acts at its dot path. On the TypeScript side they collapse to the inner type.
+They work at any depth and through any serialization path (structs, `json!`, hand-built values). A nested wrapper acts at its dot path. A nested `Always` value is kept when the partial reload selects its parent (for example `only: ['auth']` with `except: ['auth.user']`); when the parent is not selected, the parent is not sent, because the client replaces top-level props as a whole. For data that every response must carry, put `Always` on a top-level prop. On the TypeScript side they collapse to the inner type.
 
 ## Big integers
 

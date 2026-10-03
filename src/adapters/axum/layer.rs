@@ -70,7 +70,10 @@ where
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
         let cfg = self.config.clone();
-        let mut inner = self.inner.clone();
+        // Tower contract: drive the instance that poll_ready readied, leaving a
+        // fresh clone behind for the next call.
+        let clone = self.inner.clone();
+        let mut inner = std::mem::replace(&mut self.inner, clone);
         Box::pin(async move {
             #[cfg_attr(not(feature = "devtools"), allow(unused_mut))]
             let (mut parts, mut body) = req.into_parts();
@@ -114,7 +117,13 @@ where
             // still reach them on the response side.
             let extensions_snapshot = Arc::new(parts.extensions.clone());
 
+            let previous_url = match &cfg.session {
+                Some(s) if cfg.store_previous_url => s.previous_url(&parts).await,
+                _ => None,
+            };
+
             let per_request = PerRequest {
+                previous_url,
                 config: cfg.clone(),
                 flash: Arc::new(flash),
                 req_extensions: extensions_snapshot.clone(),
@@ -155,29 +164,6 @@ where
             {
                 resp.headers_mut()
                     .append(&veer_headers::VARY, HeaderValue::from_static("X-Inertia"));
-            }
-
-            // A validation request must get a Precognition response, also when
-            // an extractor rejected the body before the handler ran.
-            if req_info.is_precognition && !resp.headers().contains_key(&veer_headers::PRECOGNITION)
-            {
-                if resp.status() == StatusCode::UNPROCESSABLE_ENTITY {
-                    let body = r#"{"message":"The given data was invalid.","errors":{}}"#;
-                    *resp.body_mut() = Body::from(body);
-                    resp.headers_mut().remove(http::header::CONTENT_LENGTH);
-                    resp.headers_mut().insert(
-                        http::header::CONTENT_TYPE,
-                        HeaderValue::from_static("application/json"),
-                    );
-                }
-                resp.headers_mut().insert(
-                    &veer_headers::PRECOGNITION,
-                    HeaderValue::from_static("true"),
-                );
-                resp.headers_mut().append(
-                    &veer_headers::VARY,
-                    HeaderValue::from_static("Precognition"),
-                );
             }
 
             #[cfg(feature = "devtools")]
@@ -291,7 +277,10 @@ async fn plain_response(
         resp = redirect(
             StatusCode::SEE_OTHER,
             http::header::LOCATION,
-            req.referer.as_deref().unwrap_or("/"),
+            req.referer
+                .as_deref()
+                .or(per.previous_url.as_deref())
+                .unwrap_or("/"),
         );
     }
 

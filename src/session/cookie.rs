@@ -10,6 +10,8 @@ use sha2::Sha256;
 use std::time::Duration;
 
 const COOKIE_NAME: &str = "_veer_flash";
+const PREVIOUS_URL_COOKIE: &str = "_veer_previous_url";
+const PREVIOUS_URL_MAX_AGE: Duration = Duration::from_secs(2 * 60 * 60);
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -95,19 +97,43 @@ impl CookieSessionStore {
     }
 }
 
+fn read_cookie(req: &RequestParts, name: &str) -> Option<String> {
+    req.headers
+        .get_all(header::COOKIE)
+        .iter()
+        .filter_map(|hv| hv.to_str().ok())
+        .flat_map(|s| s.split(';'))
+        .filter_map(|s| Cookie::parse(s.trim().to_owned()).ok())
+        .find(|c| c.name() == name)
+        .map(|c| c.value().to_string())
+}
+
+impl CookieSessionStore {
+    fn set_cookie(
+        &self,
+        headers: &mut HeaderMap,
+        name: &'static str,
+        value: String,
+        max_age: Duration,
+    ) {
+        let mut c = Cookie::new(name, value);
+        c.set_path("/");
+        c.set_secure(self.secure);
+        c.set_http_only(true);
+        c.set_same_site(self.same_site);
+        c.set_max_age(cookie::time::Duration::seconds(max_age.as_secs() as i64));
+        if let Ok(hv) = http::HeaderValue::from_str(&c.to_string()) {
+            headers.append(header::SET_COOKIE, hv);
+        }
+    }
+}
+
 #[async_trait]
 impl SessionStore for CookieSessionStore {
     async fn read_and_clear(&self, req: &RequestParts) -> Flash {
-        let raw = req
-            .headers
-            .get_all(header::COOKIE)
-            .iter()
-            .filter_map(|hv| hv.to_str().ok())
-            .flat_map(|s| s.split(';'))
-            .filter_map(|s| Cookie::parse(s.trim().to_owned()).ok())
-            .find(|c| c.name() == COOKIE_NAME)
-            .map(|c| c.value().to_string());
-        raw.and_then(|r| self.decode(&r)).unwrap_or_default()
+        read_cookie(req, COOKIE_NAME)
+            .and_then(|r| self.decode(&r))
+            .unwrap_or_default()
     }
 
     async fn write(&self, headers: &mut HeaderMap, _req_extensions: &Extensions, flash: Flash) {
@@ -118,18 +144,27 @@ impl SessionStore for CookieSessionStore {
             }
             return;
         }
-        let value = self.encode(&flash);
-        let mut c = Cookie::new(COOKIE_NAME, value);
-        c.set_path("/");
-        c.set_secure(self.secure);
-        c.set_http_only(true);
-        c.set_same_site(self.same_site);
-        c.set_max_age(cookie::time::Duration::seconds(
-            self.max_age.as_secs() as i64
-        ));
-        if let Ok(hv) = http::HeaderValue::from_str(&c.to_string()) {
-            headers.append(header::SET_COOKIE, hv);
+        self.set_cookie(headers, COOKIE_NAME, self.encode(&flash), self.max_age);
+    }
+
+    async fn previous_url(&self, req: &RequestParts) -> Option<String> {
+        let raw = read_cookie(req, PREVIOUS_URL_COOKIE)?;
+        let (b64, sig) = raw.split_once('.')?;
+        if !self.verify(b64.as_bytes(), sig) {
+            return None;
         }
+        String::from_utf8(URL_SAFE_NO_PAD.decode(b64).ok()?).ok()
+    }
+
+    async fn store_previous_url(
+        &self,
+        headers: &mut HeaderMap,
+        _req_extensions: &Extensions,
+        url: &str,
+    ) {
+        let b64 = URL_SAFE_NO_PAD.encode(url);
+        let value = format!("{b64}.{}", self.sign(b64.as_bytes()));
+        self.set_cookie(headers, PREVIOUS_URL_COOKIE, value, PREVIOUS_URL_MAX_AGE);
     }
 }
 
@@ -167,6 +202,29 @@ mod tests {
         let req = parts(Some(v));
         let read = store.read_and_clear(&req).await;
         assert_eq!(read.errors["name"], ["required"]);
+    }
+
+    #[tokio::test]
+    async fn previous_url_has_its_own_signed_cookie() {
+        let store = CookieSessionStore::new(vec![0u8; 32]);
+        let mut headers = HeaderMap::new();
+        store
+            .store_previous_url(&mut headers, &Extensions::new(), "/users?page=2")
+            .await;
+        let set = headers[header::SET_COOKIE].to_str().unwrap();
+        assert!(set.starts_with("_veer_previous_url=") && set.contains("Max-Age=7200"));
+        let value = set.split_once('=').unwrap().1.split(';').next().unwrap();
+
+        let request = |value: &str| {
+            let b =
+                Request::builder().header(header::COOKIE, format!("_veer_previous_url={value}"));
+            b.body(()).unwrap().into_parts().0
+        };
+        assert_eq!(
+            store.previous_url(&request(value)).await.as_deref(),
+            Some("/users?page=2")
+        );
+        assert_eq!(store.previous_url(&request("L2V2aWw.bad")).await, None);
     }
 
     #[tokio::test]

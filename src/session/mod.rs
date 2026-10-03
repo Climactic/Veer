@@ -25,10 +25,6 @@ pub struct Flash {
     pub clear_history: bool,
     /// The next page must set `preserveFragment`.
     pub preserve_fragment: bool,
-    /// URL of the last Inertia page visit (see
-    /// [`crate::InertiaConfig::store_previous_url`]). Not one-shot: the layer
-    /// carries it from request to request.
-    pub previous_url: Option<String>,
 }
 
 impl Flash {
@@ -38,7 +34,6 @@ impl Flash {
             && self.bags.is_empty()
             && !self.clear_history
             && !self.preserve_fragment
-            && self.previous_url.is_none()
     }
 }
 
@@ -59,4 +54,21 @@ pub trait SessionStore: Send + Sync {
     /// clone of the incoming request's extensions, captured by `InertiaLayer`
     /// so session middlewares' per-request handles remain reachable.
     async fn write(&self, headers: &mut HeaderMap, req_extensions: &Extensions, flash: Flash);
+
+    /// The URL of the last page visit, for [`crate::Inertia::back`]. Unlike
+    /// flash data it is not one-shot. The default has none, so
+    /// [`crate::InertiaConfig::store_previous_url`] needs a store that
+    /// implements this method and [`Self::store_previous_url`].
+    async fn previous_url(&self, _req: &RequestParts) -> Option<String> {
+        None
+    }
+
+    /// Keep `url` as the previous URL. The default does nothing.
+    async fn store_previous_url(
+        &self,
+        _headers: &mut HeaderMap,
+        _req_extensions: &Extensions,
+        _url: &str,
+    ) {
+    }
 }

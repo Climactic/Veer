@@ -92,6 +92,5 @@ The wire formats are checked against the protocol document, the `inertia-laravel
 ## Differences from the Laravel adapter
 
 - **`Prop::try_new` needs `.rescue()`** to rescue a failure; without it an `Err` gives a `500`. This is the same rule, in Rust terms.
-- **`back()`** uses the `Referer` header first. Laravel uses the session's previous URL first.
 - **Sessions hold only veer's data** (errors, flash, previous URL). Veer is not a general session library.
 - **The once-prop expiry** is set with a `Duration` (`.until(...)`).

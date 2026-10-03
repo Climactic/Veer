@@ -533,6 +533,16 @@ async fn back_uses_the_stored_previous_url_when_there_is_no_referer() {
             config().session(session.clone()).store_previous_url(true),
         ));
 
+    // The first (HTML) page load is a page visit too.
+    app.clone()
+        .oneshot(req("GET", "/users?page=1"))
+        .await
+        .unwrap();
+    assert_eq!(
+        session.previous_url.lock().await.as_deref(),
+        Some("/users?page=1")
+    );
+
     let p = page(
         app.clone()
             .oneshot(req_inertia("GET", "/users?page=2", "v1"))
@@ -567,30 +577,43 @@ async fn back_uses_the_stored_previous_url_when_there_is_no_referer() {
 }
 
 #[tokio::test]
-async fn precognition_request_with_a_rejected_body_gets_a_precognition_response() {
-    #[derive(serde::Deserialize)]
-    struct NewUser {
-        #[allow(dead_code)]
-        name: String,
-    }
+async fn back_does_not_use_a_stored_url_that_points_at_another_origin() {
+    let session = MockSession::default();
     let app = Router::new()
-        .route(
-            "/users",
-            post(|_: Inertia, _: veer::InertiaForm<NewUser>| async { "created" }),
-        )
-        .layer(InertiaLayer::new(config()));
-    let r = http::Request::builder()
-        .method("POST")
-        .uri("/users")
-        .header("precognition", "true")
-        .header("content-type", "application/json")
-        .body(axum::body::Body::from("{}"))
+        .fallback(|i: Inertia| async move { i.render("NotFound", json!({})) })
+        .route("/go", post(|i: Inertia| async move { i.back() }))
+        .layer(InertiaLayer::new(
+            config().session(session.clone()).store_previous_url(true),
+        ));
+    app.clone()
+        .oneshot(req_inertia("GET", "//evil.example/x", "v1"))
+        .await
         .unwrap();
+    assert_eq!(*session.previous_url.lock().await, None);
+
+    // An empty 200 goes back to the stored URL when there is no Referer.
+    *session.previous_url.lock().await = Some("/users".into());
+    let app = Router::new()
+        .route("/empty", post(|| async {}))
+        .layer(InertiaLayer::new(
+            config().session(session.clone()).store_previous_url(true),
+        ));
+    let resp = app
+        .oneshot(req_inertia("POST", "/empty", "v1"))
+        .await
+        .unwrap();
+    assert_eq!(resp.headers().get("location").unwrap(), "/users");
+}
+
+#[tokio::test]
+async fn handler_that_ignores_precognition_gets_no_precognition_header() {
+    // The client then reports the fault, and no handler body is rewritten.
+    let app = Router::new()
+        .route("/users", post(|| async { "created" }))
+        .layer(InertiaLayer::new(config()));
+    let r = with_headers("POST", "/users", &[("precognition", "true")]);
     let resp = app.oneshot(r).await.unwrap();
-    assert_eq!(resp.status(), 422);
-    assert_eq!(resp.headers().get("precognition").unwrap(), "true");
-    let body: Value = serde_json::from_str(&body_string(resp).await).unwrap();
-    assert_eq!(body["errors"], json!({}));
+    assert!(resp.headers().get("precognition").is_none());
 }
 
 #[cfg(feature = "devtools")]

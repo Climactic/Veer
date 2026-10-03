@@ -18,7 +18,7 @@ inertia.location("https://…")       // leave the app
 2. the previous URL from the session, if `InertiaConfig::store_previous_url(true)` is set;
 3. `/`.
 
-With `store_previous_url`, veer stores the URL of each Inertia page visit in the session. Partial reloads and prefetches are not stored. This is the same rule as the `store_previous_url` option of the Laravel adapter. It needs a session store. With the cookie store the value lives for 60 seconds; use `tower-sessions` for a longer life.
+With `store_previous_url`, veer stores the URL of each page visit in the session. Partial reloads and prefetches are not stored, as in the Laravel adapter. It needs a session store that keeps a previous URL: both built-in stores do. The cookie store keeps it in its own signed cookie for two hours; `tower-sessions` keeps it in the session. A URL longer than 2048 bytes is not stored.
 
 ### External redirects
 

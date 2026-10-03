@@ -122,7 +122,7 @@ impl InertiaConfig {
         self
     }
 
-    /// Store the URL of each Inertia page visit in the session, so that
+    /// Store the URL of each page visit in the session, so that
     /// [`crate::Inertia::back`] has a target when the request has no `Referer`
     /// header. Needs a session store. Partial reloads and prefetches are not
     /// stored.

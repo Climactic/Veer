@@ -9,7 +9,9 @@ use serde::{Serialize, Serializer};
 /// (typed `#[derive(Serialize)]` structs, `serde_json::json!`, hand-built
 /// `Value`s, etc.). The wrapper serializes as a single-key sentinel object
 /// that the Inertia resolver strips before sending to the client. A nested
-/// wrapper keeps its value through partial-reload filters at that dot path.
+/// wrapper keeps its value when the partial reload selects its parent. When the
+/// parent is not selected, the parent is not sent: the client replaces
+/// top-level props as a whole, so a partial parent would lose its other fields.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Always<T>(pub T);
 

@@ -36,8 +36,6 @@ Brings the protocol surface up to Inertia client 3.8.0 / `inertia-laravel` 3.5.1
 - `InertiaConfig::store_previous_url`: `Inertia::back` uses the session's
   previous URL when the request has no `Referer`.
 - `veer::Head`: escaped `<head>` elements for the client's `serverHead` option.
-- A Precognition request whose body an extractor rejects still gets a
-  Precognition response.
 - Inertia DevTools protocol (`devtools` feature): `InertiaConfig::devtools(DevTools::new())` records
   each request, sets the `X-Inertia-Devtools-*` headers and serves the read API.
 - All validation messages per field: `IntoErrorBag::into_all_errors`,
@@ -66,6 +64,8 @@ Brings the protocol surface up to Inertia client 3.8.0 / `inertia-laravel` 3.5.1
 - `with_errors` on a render puts the errors on that page (not on the next one).
 - Flash data is used only by a page render; other responses pass it on.
 - `Flash::errors` is `HashMap<String, Vec<String>>` (all messages per field).
+- `SessionStore` has two new methods with defaults, `previous_url` and
+  `store_previous_url`.
 - `Flash` is `#[non_exhaustive]` and has `clear_history` / `preserve_fragment`;
   `clear_history()` on a redirect now applies to the page the redirect lands on.
 - Wrapper paths are dot paths; a nested `Merge<T>` now emits `mergeProps`.

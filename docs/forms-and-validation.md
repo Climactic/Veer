@@ -36,7 +36,7 @@ async fn users_store(
 
 - `validator::ValidationErrors` (feature `validator`)
 - `garde::Report` (feature `garde`)
-- `HashMap<String, String>`, `Vec<(String, String)>`, `Vec<(&str, &str)>`
+- `HashMap<String, String>`, `Vec<(String, String)>`, `Vec<(&'static str, &'static str)>`
 
 On the next page, the errors are in `props.errors`, which is always present (`{}` when there are none). On the frontend, `useForm` puts them in `form.errors`.
 
@@ -73,6 +73,10 @@ async fn users_store(
     inertia.redirect("/users").into_response()
 }
 ```
+
+> **Do the check first.** A Precognition request is the same request as the real submit, with one more header. A handler that does not call `inertia.precognition()` runs its action on each validation request. The client reports "Did not receive a Precognition response" in that case.
+>
+> **The body must deserialize.** `InertiaForm<T>` runs before your handler. A validation request sends the form as it is at that moment, so use types that accept incomplete input (`String`, `Option<T>`, `#[serde(default)]`) and put the rules in the validator.
 
 `respond` returns `204` when the requested fields are valid, and `422` with the errors when they are not. It reports only the fields that the client named in `Precognition-Validate-Only`.
 

@@ -179,16 +179,19 @@ pub(crate) async fn finalize(
     // Flash data from the previous request, then data flashed by this handler.
     page.flash = incoming.bags.clone().into_iter().collect();
     page.flash.extend(std::mem::take(&mut pending.bags));
-    // As the Laravel adapter: page visits by XHR, not partial reloads or prefetches.
+    // The previous URL: each page visit, but not a partial reload or a
+    // prefetch. `//host` would be another origin as a redirect target, and a
+    // very long URL does not fit in a cookie.
     let is_partial = req_info.partial_component.as_deref() == Some(builder.component.as_str());
-    if cfg.store_previous_url
-        && req_info.is_inertia
+    let url = &req_info.url;
+    let store_url = cfg.store_previous_url
         && req_info.method == http::Method::GET
         && !req_info.is_prefetch
         && !is_partial
-    {
-        pending.previous_url = Some(req_info.url.clone());
-    }
+        && per.previous_url.as_deref() != Some(url)
+        && url.len() <= 2048
+        && !url.starts_with("//")
+        && !url.starts_with("/\\");
     if builder
         .preserve_big_integers
         .unwrap_or(cfg.preserve_big_integers)
@@ -253,7 +256,11 @@ pub(crate) async fn finalize(
             })
             .unwrap_or_else(|e| format!("root view error: {e}"));
         // The extension sees the first page load through the DOM only.
-        if let (Some(id), Some(at)) = (&per.devtools_id, html.rfind("</body>")) {
+        if let Some((id, at)) = per
+            .devtools_id
+            .as_ref()
+            .and_then(|id| Some((id, html.rfind("</body>")?)))
+        {
             let tag = format!(
                 r#"<script data-inertia-devtools-id type="application/json">{}</script>"#,
                 Value::from(id.as_str())
@@ -270,6 +277,11 @@ pub(crate) async fn finalize(
 
     if let Some(recorded) = recorded {
         response.extensions_mut().insert(recorded);
+    }
+    if let (true, Some(session)) = (store_url, &cfg.session) {
+        session
+            .store_previous_url(response.headers_mut(), &per.req_extensions, url)
+            .await;
     }
     finish_with_flash(response, pending, per).await
 }
@@ -309,14 +321,10 @@ pub(crate) fn version_mismatch(location: &str, version: &str) -> Response<Body> 
 
 pub(crate) async fn finish_with_flash(
     mut response: Response<Body>,
-    mut pending: crate::session::Flash,
+    pending: crate::session::Flash,
     per: &PerRequest,
 ) -> Response<Body> {
     if let Some(session) = &per.config.session {
-        // The previous URL is not one-shot: carry it on.
-        if pending.previous_url.is_none() {
-            pending.previous_url = per.flash.previous_url.clone();
-        }
         session
             .write(response.headers_mut(), &per.req_extensions, pending)
             .await;
