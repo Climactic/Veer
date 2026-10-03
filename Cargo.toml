@@ -22,6 +22,7 @@ validator = ["dep:validator"]
 garde = ["dep:garde"]
 csrf = ["axum", "dep:cookie", "dep:hmac", "dep:sha2", "dep:base64", "dep:getrandom", "dep:subtle"]
 embed = ["axum"]
+devtools = ["axum"]
 ts = ["dep:ts-rs", "dep:inventory"]
 
 [dependencies]

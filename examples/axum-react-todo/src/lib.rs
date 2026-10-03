@@ -4,7 +4,10 @@ use axum::extract::{Path, Query, State};
 use axum::response::IntoResponse;
 use serde_json::{json, Value};
 use std::time::Duration;
-use todos::{HomeProps, NewTodo, ShowcaseProps, TodoStore, TodosCreateProps, TodosIndexProps};
+use todos::{
+    Feed, FeedItem, HomeProps, NewTodo, ShowcaseProps, Stats, TodoStore, TodosCreateProps,
+    TodosIndexProps,
+};
 use validator::Validate;
 use veer::{Inertia, InertiaForm, Method::*, Prop, ScrollMetadata};
 
@@ -35,11 +38,19 @@ async fn showcase(
 ) -> impl IntoResponse {
     let page = query.page.unwrap_or(1).clamp(1, 3);
     inertia
-        .render("showcase", ShowcaseProps {})
-        .once("plans", || async { json!(["Free", "Pro", "Team"]) })
+        .render(
+            "showcase",
+            ShowcaseProps {
+                order_id: 900_719_925_474_099_988,
+            },
+        )
+        .preserve_big_integers(true)
+        .once("plans", || async { vec!["Free", "Pro", "Team"] })
         .deferred("stats", "default", move || async move {
             tokio::time::sleep(Duration::from_millis(300)).await;
-            json!({ "todos": store.all().len() })
+            Stats {
+                todos: store.all().len(),
+            }
         })
         .prop(
             "broken",
@@ -50,14 +61,14 @@ async fn showcase(
         .prop(
             "feed",
             Prop::scroll(move || async move {
-                let first = (page - 1) * 20;
-                let items: Vec<Value> = (first + 1..=first + 20)
-                    .map(|n| json!({ "id": n, "title": format!("Item {n}") }))
+                let first = (page as u32 - 1) * 20;
+                let data = (first + 1..=first + 20)
+                    .map(|id| FeedItem {
+                        id,
+                        title: format!("Item {id}"),
+                    })
                     .collect();
-                (
-                    json!({ "data": items }),
-                    ScrollMetadata::paged("page", page, page < 3),
-                )
+                (Feed { data }, ScrollMetadata::paged("page", page, page < 3))
             })
             .match_on("data.id"),
         )

@@ -25,6 +25,10 @@ pub struct Flash {
     pub clear_history: bool,
     /// The next page must set `preserveFragment`.
     pub preserve_fragment: bool,
+    /// URL of the last Inertia page visit (see
+    /// [`crate::InertiaConfig::store_previous_url`]). Not one-shot: the layer
+    /// carries it from request to request.
+    pub previous_url: Option<String>,
 }
 
 impl Flash {
@@ -34,6 +38,7 @@ impl Flash {
             && self.bags.is_empty()
             && !self.clear_history
             && !self.preserve_fragment
+            && self.previous_url.is_none()
     }
 }
 

@@ -513,6 +513,88 @@ async fn precognition_answers_204_or_422() {
 }
 
 #[tokio::test]
+async fn back_uses_the_stored_previous_url_when_there_is_no_referer() {
+    #[derive(serde::Serialize)]
+    struct Plan {
+        name: &'static str,
+    }
+    let session = MockSession::default();
+    let app = Router::new()
+        .route(
+            "/users",
+            get(|i: Inertia| async move {
+                // A closure prop returns a typed value; no `json!` is necessary.
+                i.render("Users", json!({}))
+                    .once("plans", || async { vec![Plan { name: "Pro" }] })
+            })
+            .post(|i: Inertia| async move { i.back() }),
+        )
+        .layer(InertiaLayer::new(
+            config().session(session.clone()).store_previous_url(true),
+        ));
+
+    let p = page(
+        app.clone()
+            .oneshot(req_inertia("GET", "/users?page=2", "v1"))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(p["props"]["plans"], json!([{"name": "Pro"}]));
+
+    // A partial reload and a prefetch do not change the stored URL.
+    let partial = with_headers(
+        "GET",
+        "/users?page=3",
+        &[("x-inertia-partial-component", "Users")],
+    );
+    app.clone().oneshot(partial).await.unwrap();
+    let prefetch = with_headers("GET", "/users?page=4", &[("purpose", "prefetch")]);
+    app.clone().oneshot(prefetch).await.unwrap();
+
+    let resp = app
+        .clone()
+        .oneshot(req_inertia("POST", "/users", "v1"))
+        .await
+        .unwrap();
+    assert_eq!(resp.headers().get("location").unwrap(), "/users?page=2");
+    // The URL is kept for later requests.
+    let resp = app
+        .oneshot(req_inertia("POST", "/users", "v1"))
+        .await
+        .unwrap();
+    assert_eq!(resp.headers().get("location").unwrap(), "/users?page=2");
+}
+
+#[tokio::test]
+async fn precognition_request_with_a_rejected_body_gets_a_precognition_response() {
+    #[derive(serde::Deserialize)]
+    struct NewUser {
+        #[allow(dead_code)]
+        name: String,
+    }
+    let app = Router::new()
+        .route(
+            "/users",
+            post(|_: Inertia, _: veer::InertiaForm<NewUser>| async { "created" }),
+        )
+        .layer(InertiaLayer::new(config()));
+    let r = http::Request::builder()
+        .method("POST")
+        .uri("/users")
+        .header("precognition", "true")
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from("{}"))
+        .unwrap();
+    let resp = app.oneshot(r).await.unwrap();
+    assert_eq!(resp.status(), 422);
+    assert_eq!(resp.headers().get("precognition").unwrap(), "true");
+    let body: Value = serde_json::from_str(&body_string(resp).await).unwrap();
+    assert_eq!(body["errors"], json!({}));
+}
+
+#[cfg(feature = "devtools")]
+#[tokio::test]
 async fn devtools_records_entries_and_serves_the_read_api() {
     let app = Router::new()
         .route(
@@ -553,6 +635,10 @@ async fn devtools_records_entries_and_serves_the_read_api() {
     assert_eq!(meta["component"], "Users/Show");
     assert_eq!(meta["url"], "http://localhost/users/1");
     assert_eq!(entry["route"]["uri"], "/users/{id}");
+    assert!(entry["renderSource"]["file"]
+        .as_str()
+        .unwrap()
+        .ends_with("v3_protocol.rs"));
     assert_eq!(entry["propValues"]["token"], "[REDACTED]");
     assert_eq!(entry["props"]["stats"]["deferGroup"], "side");
     assert_eq!(

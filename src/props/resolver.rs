@@ -120,15 +120,15 @@ fn strip_sentinels(
     always_paths: &mut HashSet<String>,
     merge_paths: &mut HashSet<String>,
 ) {
-    use crate::props::{ALWAYS_SENTINEL, MERGE_SENTINEL};
+    let sentinels = crate::props::sentinels();
 
     // Unwrap any chain of sentinels at this position, recording each.
     loop {
         let kind = match value.as_object() {
             Some(map) if map.len() == 1 => {
-                if map.contains_key(ALWAYS_SENTINEL) {
+                if map.contains_key(&sentinels.always) {
                     Some(true)
-                } else if map.contains_key(MERGE_SENTINEL) {
+                } else if map.contains_key(&sentinels.merge) {
                     Some(false)
                 } else {
                     None
@@ -771,6 +771,14 @@ mod tests {
 
         let r = run(&req_partial(&["auth.perms"], &[]), base, props()).await;
         assert_eq!(r.props, json!({"auth": {"perms": ["edit"]}}));
+    }
+
+    #[tokio::test]
+    async fn fixed_sentinel_names_in_user_data_are_not_unwrapped() {
+        let base = json!({"a": {"$$veer_merge$$": [1]}, "b": {"$$veer_always$$": 1}});
+        let r = run(&req_full(), base.clone(), vec![]).await;
+        assert_eq!(r.props, base);
+        assert!(r.merge_props.is_empty());
     }
 
     #[tokio::test]

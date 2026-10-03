@@ -37,6 +37,7 @@
 //! | `garde` | off | `IntoErrorBag` impl for `garde::Report` |
 //! | `csrf` | off | Inertia/axios-compatible CSRF layer (`CsrfLayer`) |
 //! | `embed` | off | Embedded-asset serving service (`EmbeddedAssets`) |
+//! | `devtools` | off | Recorder + read API for the Inertia DevTools browser extension |
 //! | `ts` | off | TypeScript bindings codegen (`ts-rs` + `inventory`) |
 //!
 //! # Architecture
@@ -57,9 +58,11 @@
 
 pub mod bigint;
 pub mod config;
+#[cfg(feature = "devtools")]
 pub mod devtools;
 pub mod error;
 pub mod errors;
+pub mod head;
 pub mod headers;
 pub mod inertia;
 pub mod page;
@@ -95,8 +98,10 @@ pub mod __private {
 pub use config::InertiaConfig;
 #[cfg(feature = "csrf")]
 pub use csrf::CsrfTokens;
+#[cfg(feature = "devtools")]
 pub use devtools::DevTools;
 pub use error::VeerError;
+pub use head::Head;
 pub use inertia::Inertia;
 pub use page::PageObject;
 pub use props::{Always, Merge, Prop, ScrollMetadata};

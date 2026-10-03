@@ -43,7 +43,9 @@ impl Inertia {
     }
 
     /// Render a component with strongly-typed props.
+    #[track_caller]
     pub fn render<P: Serialize>(&self, component: impl Into<String>, props: P) -> InertiaResponse {
+        let caller = std::panic::Location::caller();
         let value = match serde_json::to_value(&props) {
             Ok(v) => v,
             Err(e) => {
@@ -51,7 +53,9 @@ impl Inertia {
                 Value::Null
             }
         };
-        InertiaResponse::new(component, value)
+        let mut response = InertiaResponse::new(component, value);
+        response.render_source = Some(caller);
+        response
     }
 
     /// Internal redirect (303 on POST/PUT/PATCH/DELETE; 302-equivalent SeeOther on GET).
@@ -77,17 +81,18 @@ impl Inertia {
         r
     }
 
-    /// Redirect to the `Referer` header value, or `/` if absent.
+    /// Redirect to the page that the user came from: the `Referer` header,
+    /// then the session's previous URL (see
+    /// [`InertiaConfig::store_previous_url`]), then `/`.
     ///
     /// Useful for POST-then-redirect-back flows: submit a form, then call
     /// `inertia.back()` to send the user back to the page they came from.
-    /// Without a `Referer` header (e.g. direct navigation) the redirect falls
-    /// back to `/`.
     pub fn back(&self) -> InertiaResponse {
         let to = self
             .request
             .referer
             .clone()
+            .or_else(|| self.incoming_flash.previous_url.clone())
             .unwrap_or_else(|| "/".to_string());
         self.redirect(to)
     }

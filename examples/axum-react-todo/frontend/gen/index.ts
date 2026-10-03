@@ -35,9 +35,33 @@ export type ErrorBag = Record<string, string>;
 
 export type Flash = Record<string, unknown>;
 
+export type Feed = { data: Array<FeedItem>, };
+
+export type FeedItem = { id: number, title: string, };
+
 export type HomeProps = Record<symbol, never>;
 
-export type ShowcaseProps = Record<symbol, never>;
+export type ShowcaseClosureProps = { 
+/**
+ * Once prop.
+ */
+plans: Array<string>, 
+/**
+ * Deferred prop: absent on the first render.
+ */
+stats?: Stats, 
+/**
+ * Infinite-scroll prop.
+ */
+feed: Feed, };
+
+export type ShowcaseProps = { 
+/**
+ * Larger than JavaScript's safe integer range: sent as a `BigInt`.
+ */
+orderId: bigint, };
+
+export type Stats = { todos: number, };
 
 export type Todo = { id: bigint, title: string, done: boolean, };
 
@@ -47,7 +71,7 @@ export type TodosIndexProps = { todos: Array<Todo>, };
 
 export type Pages =
   | { component: "home"; props: HomeProps }
-  | { component: "showcase"; props: ShowcaseProps }
+  | { component: "showcase"; props: ShowcaseProps & ShowcaseClosureProps }
   | { component: "todos/create"; props: TodosCreateProps }
   | { component: "todos/index"; props: TodosIndexProps };
 

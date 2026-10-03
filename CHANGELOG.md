@@ -31,7 +31,14 @@ Brings the protocol surface up to Inertia client 3.8.0 / `inertia-laravel` 3.5.1
 - Precognition: `Inertia::precognition()` and `Precognition::respond`.
 - `RequestInfo` fields `error_bag`, `except_once_props`, `scroll_prepend`,
   `is_prefetch`, `is_precognition`, `validate_only`.
-- Inertia DevTools protocol: `InertiaConfig::devtools(DevTools::new())` records
+- Closure props return any `Serialize` value, and `register_page!` takes a
+  third argument that gives closure props their TypeScript types.
+- `InertiaConfig::store_previous_url`: `Inertia::back` uses the session's
+  previous URL when the request has no `Referer`.
+- `veer::Head`: escaped `<head>` elements for the client's `serverHead` option.
+- A Precognition request whose body an extractor rejects still gets a
+  Precognition response.
+- Inertia DevTools protocol (`devtools` feature): `InertiaConfig::devtools(DevTools::new())` records
   each request, sets the `X-Inertia-Devtools-*` headers and serves the read API.
 - All validation messages per field: `IntoErrorBag::into_all_errors`,
   `InertiaConfig::with_all_errors`.
@@ -73,6 +80,8 @@ Brings the protocol surface up to Inertia client 3.8.0 / `inertia-laravel` 3.5.1
   `<!--<script>` gave a blank page.
 - Flash data survives a version-mismatch 409 and redirect chains.
 - `Always` / `Merge` wrappers inside shared props are stripped.
+- The wrapper marker keys have a random suffix for each process, so user data
+  cannot name them.
 - Redirect responses no longer run shared props and prop closures.
 - SSR errors include the error body of the SSR server.
 

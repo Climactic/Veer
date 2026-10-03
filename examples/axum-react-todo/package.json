@@ -9,7 +9,7 @@
     "ssr:dev": "bun frontend/ssr.tsx"
   },
   "dependencies": {
-    "@inertiajs/react": "^3.7.1",
+    "@inertiajs/react": "^3.8.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

@@ -2,10 +2,13 @@
 //! finalizes any `InertiaResponseMarker` produced by handlers.
 
 use super::extractor::PerRequest;
+#[cfg(feature = "devtools")]
+use super::response::RecordedPage;
 use super::response::{
-    finalize, finish_with_flash, redirect, version_mismatch, InertiaResponseMarker, RecordedPage,
+    finalize, finish_with_flash, redirect, version_mismatch, InertiaResponseMarker,
 };
 use crate::config::InertiaConfig;
+#[cfg(feature = "devtools")]
 use crate::devtools::{self, Finished};
 use crate::headers as veer_headers;
 use crate::protocol::is_version_mismatch;
@@ -69,11 +72,15 @@ where
         let cfg = self.config.clone();
         let mut inner = self.inner.clone();
         Box::pin(async move {
+            #[cfg_attr(not(feature = "devtools"), allow(unused_mut))]
             let (mut parts, mut body) = req.into_parts();
 
             // DevTools: answer the read API, or start a recording.
+            #[cfg(feature = "devtools")]
             let mut recording = None;
+            #[cfg(feature = "devtools")]
             let mut request_body = devtools::body_empty();
+            #[cfg(feature = "devtools")]
             if let Some(devtools) = &cfg.devtools {
                 if let Some((status, json)) = devtools.read_api(&parts) {
                     let mut resp = Response::new(Body::from(json));
@@ -111,7 +118,10 @@ where
                 config: cfg.clone(),
                 flash: Arc::new(flash),
                 req_extensions: extensions_snapshot.clone(),
+                #[cfg(feature = "devtools")]
                 devtools_id: recording.as_ref().map(|r| r.id.clone()),
+                #[cfg(not(feature = "devtools"))]
+                devtools_id: None,
             };
             parts.extensions.insert(per_request.clone());
 
@@ -147,6 +157,30 @@ where
                     .append(&veer_headers::VARY, HeaderValue::from_static("X-Inertia"));
             }
 
+            // A validation request must get a Precognition response, also when
+            // an extractor rejected the body before the handler ran.
+            if req_info.is_precognition && !resp.headers().contains_key(&veer_headers::PRECOGNITION)
+            {
+                if resp.status() == StatusCode::UNPROCESSABLE_ENTITY {
+                    let body = r#"{"message":"The given data was invalid.","errors":{}}"#;
+                    *resp.body_mut() = Body::from(body);
+                    resp.headers_mut().remove(http::header::CONTENT_LENGTH);
+                    resp.headers_mut().insert(
+                        http::header::CONTENT_TYPE,
+                        HeaderValue::from_static("application/json"),
+                    );
+                }
+                resp.headers_mut().insert(
+                    &veer_headers::PRECOGNITION,
+                    HeaderValue::from_static("true"),
+                );
+                resp.headers_mut().append(
+                    &veer_headers::VARY,
+                    HeaderValue::from_static("Precognition"),
+                );
+            }
+
+            #[cfg(feature = "devtools")]
             if let Some(recording) = recording {
                 let page = resp.extensions_mut().remove::<RecordedPage>();
                 for (name, value) in [
@@ -166,7 +200,8 @@ where
                     request_body,
                     status: resp.status(),
                     response_headers: resp.headers(),
-                    page: page.as_ref().map(|p| &*p.0),
+                    page: page.as_ref().map(|p| &*p.page),
+                    render_source: page.as_ref().and_then(|p| p.source),
                     response_is_empty: http_body::Body::size_hint(resp.body()).exact() == Some(0),
                     route: extensions_snapshot
                         .get::<axum::extract::MatchedPath>()
@@ -179,6 +214,7 @@ where
     }
 }
 
+#[cfg(feature = "devtools")]
 /// Capture the request body for a DevTools entry. Only a JSON body of a known,
 /// small size is read; it is then handed on unchanged.
 async fn capture_request_body(

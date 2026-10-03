@@ -1,16 +1,10 @@
 import { Deferred, InfiniteScroll, router, usePage } from "@inertiajs/react";
 import Button from "../components/Button";
 import Layout from "../components/Layout";
-import { showcase } from "../gen";
+import { showcase, type Pages } from "../gen";
 
-type Item = { id: number; title: string };
-
-// The closure props that the handler attaches (see `showcase` in src/lib.rs).
-type Props = {
-  plans: string[];
-  stats?: { todos: number };
-  feed: { data: Item[] };
-};
+// Generated from `ShowcaseProps & ShowcaseClosureProps` (see src/todos.rs).
+type Props = Extract<Pages, { component: "showcase" }>["props"];
 
 export default function Showcase() {
   const { props } = usePage<Props>();
@@ -18,6 +12,11 @@ export default function Showcase() {
   return (
     <Layout>
       <h1>Showcase</h1>
+
+      <h2>Big integer</h2>
+      <p id="order">
+        Order {String(props.orderId)} ({typeof props.orderId})
+      </p>
 
       <h2>Once prop</h2>
       <p id="plans">Plans: {props.plans.join(", ")}</p>

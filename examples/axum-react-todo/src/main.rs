@@ -29,8 +29,8 @@ async fn main() {
     let mut cfg = InertiaConfig::new().version(|| "dev".into()).session(
         CookieSessionStore::new(b"01234567890123456789012345678901".to_vec()).secure(false),
     );
-    // Record requests for the Inertia DevTools browser extension. The read
-    // API has no authorization, so this is for debug builds only.
+    // Record requests for the Inertia DevTools browser extension (`devtools`
+    // feature). The read API is open, so this is for debug builds only.
     if cfg!(debug_assertions) {
         cfg = cfg.devtools(DevTools::new());
     }

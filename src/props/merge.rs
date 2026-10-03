@@ -27,7 +27,7 @@ impl<T> Merge<T> {
 impl<T: Serialize> Serialize for Merge<T> {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         let mut map = s.serialize_map(Some(1))?;
-        map.serialize_entry(super::MERGE_SENTINEL, &self.0)?;
+        map.serialize_entry(&super::sentinels().merge, &self.0)?;
         map.end()
     }
 }

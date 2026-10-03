@@ -15,6 +15,14 @@ pub(crate) struct Loaded {
     pub scroll: Option<ScrollMetadata>,
 }
 
+/// Serialize a closure's value. A failure is logged and gives `null`.
+pub(crate) fn to_json<T: Serialize>(value: T) -> Value {
+    serde_json::to_value(value).unwrap_or_else(|error| {
+        tracing::error!(%error, "veer: failed to serialize a prop value; using null");
+        Value::Null
+    })
+}
+
 type Loader =
     Box<dyn FnOnce() -> Pin<Box<dyn Future<Output = Result<Loaded, String>> + Send>> + Send>;
 
@@ -127,15 +135,19 @@ impl Prop {
     }
 
     /// A prop resolved on each full visit, and on partial reloads that select it.
-    pub fn new<F, Fut>(f: F) -> Self
+    ///
+    /// The closure returns any `Serialize` value: a struct, a `Vec`, or
+    /// `serde_json::json!`.
+    pub fn new<F, Fut, T>(f: F) -> Self
     where
         F: FnOnce() -> Fut + Send + 'static,
-        Fut: Future<Output = Value> + Send + 'static,
+        Fut: Future<Output = T> + Send + 'static,
+        T: Serialize,
     {
         Self::from_loader(Box::new(|| {
             Box::pin(async {
                 Ok(Loaded {
-                    value: f().await,
+                    value: to_json(f().await),
                     scroll: None,
                 })
             })
@@ -144,17 +156,18 @@ impl Prop {
 
     /// A prop that can fail. On `Err` the response is a `500`, unless the prop
     /// has [`Self::rescue`].
-    pub fn try_new<F, Fut, E>(f: F) -> Self
+    pub fn try_new<F, Fut, T, E>(f: F) -> Self
     where
         F: FnOnce() -> Fut + Send + 'static,
-        Fut: Future<Output = Result<Value, E>> + Send + 'static,
+        Fut: Future<Output = Result<T, E>> + Send + 'static,
+        T: Serialize,
         E: Display,
     {
         Self::from_loader(Box::new(|| {
             Box::pin(async {
                 match f().await {
                     Ok(value) => Ok(Loaded {
-                        value,
+                        value: to_json(value),
                         scroll: None,
                     }),
                     Err(e) => Err(e.to_string()),
@@ -166,16 +179,17 @@ impl Prop {
     /// An infinite-scroll prop. The closure returns the page value (an object
     /// that holds the items under the wrapper key, `data` by default) and its
     /// cursor metadata.
-    pub fn scroll<F, Fut>(f: F) -> Self
+    pub fn scroll<F, Fut, T>(f: F) -> Self
     where
         F: FnOnce() -> Fut + Send + 'static,
-        Fut: Future<Output = (Value, ScrollMetadata)> + Send + 'static,
+        Fut: Future<Output = (T, ScrollMetadata)> + Send + 'static,
+        T: Serialize,
     {
         let mut prop = Self::from_loader(Box::new(|| {
             Box::pin(async {
                 let (value, metadata) = f().await;
                 Ok(Loaded {
-                    value,
+                    value: to_json(value),
                     scroll: Some(metadata),
                 })
             })

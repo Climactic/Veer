@@ -195,18 +195,11 @@ pub struct Finished<'a> {
     pub response_is_empty: bool,
     /// The matched route pattern, if known.
     pub route: Option<&'a str>,
+    /// Where the page render was called, if known.
+    pub render_source: Option<&'static std::panic::Location<'static>>,
 }
 
 impl Recording {
-    /// The `<script>` tag that lets the extension find the entry of the first
-    /// page load.
-    pub fn script_tag(id: &str) -> String {
-        format!(
-            r#"<script data-inertia-devtools-id type="application/json">{}</script>"#,
-            Value::from(id)
-        )
-    }
-
     /// The batch root: the client sends it back as `X-Inertia-Devtools-Parent`.
     pub fn parent_out(&self, req: &RequestInfo) -> &str {
         match &self.batch_id {
@@ -281,7 +274,7 @@ impl Recording {
             "props": f.page.map_or(json!({}), prop_meta),
             "propValues": prop_values,
             "route": { "name": null, "uri": f.route.unwrap_or(""), "action": null },
-            "renderSource": null,
+            "renderSource": f.render_source.map(|l| json!({ "file": l.file(), "line": l.line() })),
             "componentPath": null,
         }));
     }

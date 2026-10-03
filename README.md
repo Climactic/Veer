@@ -207,16 +207,18 @@ An Inertia request gets 409 + `X-Inertia-Location`, which the client honors with
 inertia
     .render("Users/Index", serde_json::json!({ "users": users, "notifications": notifications }))
     .lazy("stats", || async { json!({ "hits": load_stats().await }) })
-    .deferred("expensive", "dashboard", || async { json!(load_expensive().await) })
-    .once("plans", || async { json!(load_plans().await) })
+    .deferred("expensive", "dashboard", || async { load_expensive().await })
+    .once("plans", || async { load_plans().await })
     .prepend("notifications")
     .match_on("notifications.id")
     .prop("posts", Prop::scroll(move || async move {
         let page = load_posts(page_no).await;
         (json!({ "data": page.items }), ScrollMetadata::paged("page", page_no, page.has_more))
     }))
-    .prop("permissions", Prop::try_new(|| async { load_permissions().await.map(|p| json!(p)) }).defer().rescue())
+    .prop("permissions", Prop::try_new(|| async { load_permissions().await }).defer().rescue())
 ```
+
+A closure returns any `Serialize` value (a struct, a `Vec`, or `json!`).
 
 | Method | Behavior |
 |---|---|
@@ -229,6 +231,10 @@ inertia
 | `encrypt_history()` / `clear_history()` | Set the history-state primitives. `InertiaConfig::encrypt_history(true)` turns encryption on for every page |
 | `preserve_big_integers(bool)` | Send integers outside the JavaScript safe range as `{"$bigint": "…"}`, which the client (3.8+) revives as `BigInt`. `InertiaConfig::preserve_big_integers(true)` sets the default |
 | `no_ssr()` | Skip SSR for this response only |
+
+`inertia.back()` redirects to the `Referer`. With `InertiaConfig::store_previous_url(true)` and a session store, veer also keeps the URL of the last Inertia page visit in the session, and `back()` uses it when the request has no `Referer`.
+
+`veer::Head` builds the prop for the client's `serverHead` option and escapes its values: `Head::new().title("Users").meta("description", "…")`, passed as the `head` prop.
 
 `inertia.with_errors(errors)` keeps all messages of a field. `props.errors` has the first message as a string by default; `InertiaConfig::with_all_errors(true)` sends all of them as an array.
 
@@ -337,6 +343,8 @@ For SSR in production, build the sidecar with `vite build --ssr frontend/ssr.tsx
 
 veer implements the [DevTools protocol](https://inertiajs.com/docs/v3/advanced/devtools-protocol), so the Inertia DevTools browser extension shows each request with its props, headers and route.
 
+Enable the `devtools` Cargo feature, then turn the recorder on in development:
+
 ```rust,ignore
 let mut cfg = InertiaConfig::new();
 if cfg!(debug_assertions) {
@@ -344,7 +352,9 @@ if cfg!(debug_assertions) {
 }
 ```
 
-`InertiaLayer` then records one entry for each request (in memory, the 100 newest for each browser tab), adds the `X-Inertia-Devtools-Id` headers, and serves `GET /_inertia/devtools/entries[/{id}]`. Sensitive keys (`password`, `token`, …) and headers (`Cookie`, `Authorization`, …) are redacted. The read API is open by default, so enable the recorder in development only; `DevTools::new().authorize(|request| …)` adds a guard. Source-location links ("open in editor") are not available.
+Without the feature, the recorder is not compiled into the binary.
+
+`InertiaLayer` then records one entry for each request (in memory, the 100 newest for each browser tab), adds the `X-Inertia-Devtools-Id` headers, and serves `GET /_inertia/devtools/entries[/{id}]`. Sensitive keys (`password`, `token`, …) and headers (`Cookie`, `Authorization`, …) are redacted. The read API is open by default, so enable the recorder in development only; `DevTools::new().authorize(|request| …)` adds a guard. The entry has the source location of the `inertia.render` call; the other "open in editor" links (handler, component file) are not available.
 
 </details>
 
@@ -473,6 +483,19 @@ let app = router().build().with_state(state).layer(InertiaLayer::new(cfg));
 ```
 
 `build()` returns a regular `axum::Router`, so `.with_state` / `.layer` / `.merge` / anything else just works. Same-path multi-method calls (GET + POST on `/users`) are merged into a single `MethodRouter` automatically — no panic on duplicate paths.
+
+Props that the handler attaches as closures (`once`, `deferred`, `lazy`, `Prop::scroll`, …) are not fields of the props struct. Describe them in a second struct and pass it as the third argument; the page's TS type is then `UsersIndexProps & UsersIndexClosureProps`:
+
+```rust,ignore
+#[derive(TS)]
+#[ts(export)]
+struct UsersIndexClosureProps {
+    plans: Vec<Plan>,        // once prop
+    #[ts(optional)]
+    stats: Option<Stats>,    // deferred prop: absent on the first render
+}
+veer::register_page!(UsersIndexProps, "Users/Index", UsersIndexClosureProps);
+```
 
 `ts-rs` mirrors `#[serde(rename_all)]` into the generated TypeScript, so the same struct drives both wire format and type. Route names follow the Laravel resource convention (`index`/`show`/`create`/`store`/`update`/`destroy`) so they don't collide with JavaScript reserved words.
 
@@ -616,6 +639,7 @@ Flash is stored under a single key (`_veer_flash` by default; override with `Tow
 | `garde` | off | `IntoErrorBag` impl for `garde::Report` |
 | `csrf` | off | Inertia/axios-compatible CSRF protection (`CsrfLayer`) |
 | `embed` | off | Embedded-asset serving for single-binary deploys (`EmbeddedAssets`) |
+| `devtools` | off | Recorder + read API for the Inertia DevTools browser extension |
 | `ts` | off | End-to-end TypeScript bindings codegen (`ts-rs` + `inventory`) |
 
 Disabling a feature drops its transitive deps entirely.

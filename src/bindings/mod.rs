@@ -74,8 +74,47 @@ pub trait InertiaPageProps {
 ///
 /// veer::register_page!(UsersIndexProps, "Users/Index");
 /// ```
+///
+/// Props that the handler attaches as closures (`once`, `deferred`, `lazy`,
+/// `Prop::scroll`, …) are not fields of the props struct. Describe them in a
+/// second struct (it needs only `ts_rs::TS`) and pass it as the third
+/// argument; the page's TS props type is then the intersection of the two:
+///
+/// ```ignore
+/// #[derive(TS)]
+/// #[ts(export)]
+/// struct UsersIndexClosureProps {
+///     plans: Vec<Plan>,            // once prop: always present
+///     #[ts(optional)]
+///     stats: Option<Stats>,        // deferred prop: absent on first render
+/// }
+///
+/// veer::register_page!(UsersIndexProps, "Users/Index", UsersIndexClosureProps);
+/// ```
 #[macro_export]
 macro_rules! register_page {
+    ($ty:ty, $component:literal, $closure_ty:ty) => {
+        impl $crate::bindings::InertiaPageProps for $ty {
+            const COMPONENT: &'static str = $component;
+        }
+        $crate::__private::inventory::submit! {
+            $crate::bindings::PageEntry {
+                component: $component,
+                ts_name: || {
+                    let cfg = $crate::__private::ts_rs::Config::from_env();
+                    format!(
+                        "{} & {}",
+                        <$ty as $crate::__private::ts_rs::TS>::ident(&cfg),
+                        <$closure_ty as $crate::__private::ts_rs::TS>::ident(&cfg),
+                    )
+                },
+                collect_decls: |out| {
+                    $crate::bindings::collect_decls::<$ty>(out);
+                    $crate::bindings::collect_decls::<$closure_ty>(out);
+                },
+            }
+        }
+    };
     ($ty:ty, $component:literal) => {
         impl $crate::bindings::InertiaPageProps for $ty {
             const COMPONENT: &'static str = $component;

@@ -8,7 +8,7 @@ publish = false
 default-run = "axum-react-todo"
 
 [dependencies]
-veer = { path = "../..", features = ["axum", "cookie-session", "csrf", "validator", "ssr", "ts"] }
+veer = { path = "../..", features = ["axum", "cookie-session", "csrf", "validator", "ssr", "ts", "devtools"] }
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

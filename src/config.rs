@@ -6,7 +6,6 @@ use crate::root_view::{MinimalRootView, RootView};
 use crate::session::SessionStore;
 use crate::shared::SharedProps;
 use crate::ssr::SsrClient;
-use serde_json::Value;
 use std::borrow::Cow;
 use std::future::Future;
 use std::sync::Arc;
@@ -28,6 +27,8 @@ pub struct InertiaConfig {
     pub(crate) encrypt_history: bool,
     pub(crate) preserve_big_integers: bool,
     pub(crate) with_all_errors: bool,
+    pub(crate) store_previous_url: bool,
+    #[cfg(feature = "devtools")]
     pub(crate) devtools: Option<crate::devtools::DevTools>,
 }
 
@@ -45,6 +46,8 @@ impl Default for InertiaConfig {
             encrypt_history: false,
             preserve_big_integers: false,
             with_all_errors: false,
+            store_previous_url: false,
+            #[cfg(feature = "devtools")]
             devtools: None,
         }
     }
@@ -103,13 +106,28 @@ impl InertiaConfig {
 
     /// Share a once prop with every page. The closure runs only when the
     /// client does not hold the value yet. A handler prop with the same key wins.
-    pub fn share_once<F, Fut>(mut self, key: impl Into<String>, f: F) -> Self
+    pub fn share_once<F, Fut, T>(mut self, key: impl Into<String>, f: F) -> Self
     where
         F: Fn(&RequestInfo) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Value> + Send + 'static,
+        Fut: Future<Output = T> + Send + 'static,
+        T: serde::Serialize,
     {
-        self.shared_once
-            .push((key.into(), Arc::new(move |req| Box::pin(f(req)))));
+        self.shared_once.push((
+            key.into(),
+            Arc::new(move |req| {
+                let value = f(req);
+                Box::pin(async { crate::props::prop::to_json(value.await) })
+            }),
+        ));
+        self
+    }
+
+    /// Store the URL of each Inertia page visit in the session, so that
+    /// [`crate::Inertia::back`] has a target when the request has no `Referer`
+    /// header. Needs a session store. Partial reloads and prefetches are not
+    /// stored.
+    pub fn store_previous_url(mut self, on: bool) -> Self {
+        self.store_previous_url = on;
         self
     }
 
@@ -130,6 +148,7 @@ impl InertiaConfig {
     ///     config = config.devtools(DevTools::new());
     /// }
     /// ```
+    #[cfg(feature = "devtools")]
     pub fn devtools(mut self, devtools: crate::devtools::DevTools) -> Self {
         self.devtools = Some(devtools);
         self

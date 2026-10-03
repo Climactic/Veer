@@ -19,6 +19,9 @@ pub struct InertiaResponse {
     pub(crate) skip_ssr: bool,
     pub(crate) redirect: Option<crate::protocol::Redirect>,
     pub(crate) pending_flash: crate::session::Flash,
+    /// Where `Inertia::render` was called (for DevTools).
+    #[cfg_attr(not(feature = "devtools"), allow(dead_code))]
+    pub(crate) render_source: Option<&'static std::panic::Location<'static>>,
 }
 
 impl InertiaResponse {
@@ -35,6 +38,7 @@ impl InertiaResponse {
             skip_ssr: false,
             redirect: None,
             pending_flash: Default::default(),
+            render_source: None,
         }
     }
 
@@ -49,10 +53,11 @@ impl InertiaResponse {
     ///
     /// Inertia v3 calls this concept "optional". `lazy()` is the preferred method name in
     /// this crate; `optional()` is provided as a direct alias for ergonomics.
-    pub fn lazy<F, Fut>(self, key: impl Into<String>, f: F) -> Self
+    pub fn lazy<F, Fut, T>(self, key: impl Into<String>, f: F) -> Self
     where
         F: FnOnce() -> Fut + Send + 'static,
-        Fut: Future<Output = Value> + Send + 'static,
+        Fut: Future<Output = T> + Send + 'static,
+        T: serde::Serialize,
     {
         self.prop(key, Prop::new(f).optional())
     }
@@ -61,29 +66,32 @@ impl InertiaResponse {
     ///
     /// Inertia v3 calls this "optional". This method is an alias for [`Self::lazy`]; both
     /// route through the same internal map and behave identically.
-    pub fn optional<F, Fut>(self, key: impl Into<String>, f: F) -> Self
+    pub fn optional<F, Fut, T>(self, key: impl Into<String>, f: F) -> Self
     where
         F: FnOnce() -> Fut + Send + 'static,
-        Fut: Future<Output = Value> + Send + 'static,
+        Fut: Future<Output = T> + Send + 'static,
+        T: serde::Serialize,
     {
         self.lazy(key, f)
     }
 
     /// Attach a deferred prop.
-    pub fn deferred<F, Fut>(self, key: impl Into<String>, group: impl Into<String>, f: F) -> Self
+    pub fn deferred<F, Fut, T>(self, key: impl Into<String>, group: impl Into<String>, f: F) -> Self
     where
         F: FnOnce() -> Fut + Send + 'static,
-        Fut: Future<Output = Value> + Send + 'static,
+        Fut: Future<Output = T> + Send + 'static,
+        T: serde::Serialize,
     {
         self.prop(key, Prop::new(f).group(group))
     }
 
     /// Attach a once prop: resolved one time, then remembered by the client
     /// across pages. Use [`Self::prop`] for a custom key or an expiry.
-    pub fn once<F, Fut>(self, key: impl Into<String>, f: F) -> Self
+    pub fn once<F, Fut, T>(self, key: impl Into<String>, f: F) -> Self
     where
         F: FnOnce() -> Fut + Send + 'static,
-        Fut: Future<Output = Value> + Send + 'static,
+        Fut: Future<Output = T> + Send + 'static,
+        T: serde::Serialize,
     {
         self.prop(key, Prop::new(f).once())
     }

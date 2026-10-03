@@ -179,6 +179,16 @@ pub(crate) async fn finalize(
     // Flash data from the previous request, then data flashed by this handler.
     page.flash = incoming.bags.clone().into_iter().collect();
     page.flash.extend(std::mem::take(&mut pending.bags));
+    // As the Laravel adapter: page visits by XHR, not partial reloads or prefetches.
+    let is_partial = req_info.partial_component.as_deref() == Some(builder.component.as_str());
+    if cfg.store_previous_url
+        && req_info.is_inertia
+        && req_info.method == http::Method::GET
+        && !req_info.is_prefetch
+        && !is_partial
+    {
+        pending.previous_url = Some(req_info.url.clone());
+    }
     if builder
         .preserve_big_integers
         .unwrap_or(cfg.preserve_big_integers)
@@ -189,10 +199,10 @@ pub(crate) async fn finalize(
     }
 
     // The DevTools recorder reads the page from the response extensions.
-    let recorded = per
-        .devtools_id
-        .as_ref()
-        .map(|_| RecordedPage(Arc::new(serde_json::to_value(&page).unwrap_or_default())));
+    let recorded = per.devtools_id.as_ref().map(|_| RecordedPage {
+        page: Arc::new(serde_json::to_value(&page).unwrap_or_default()),
+        source: builder.render_source,
+    });
 
     let mut response = if decision == ResponseShape::Json {
         let body = serde_json::to_vec(&page).unwrap_or_else(|e| {
@@ -244,7 +254,11 @@ pub(crate) async fn finalize(
             .unwrap_or_else(|e| format!("root view error: {e}"));
         // The extension sees the first page load through the DOM only.
         if let (Some(id), Some(at)) = (&per.devtools_id, html.rfind("</body>")) {
-            html.insert_str(at, &crate::devtools::Recording::script_tag(id));
+            let tag = format!(
+                r#"<script data-inertia-devtools-id type="application/json">{}</script>"#,
+                Value::from(id.as_str())
+            );
+            html.insert_str(at, &tag);
         }
         let mut r = Response::new(Body::from(html));
         r.headers_mut().insert(
@@ -262,7 +276,11 @@ pub(crate) async fn finalize(
 
 /// The rendered page object, for the DevTools recorder.
 #[derive(Clone)]
-pub(crate) struct RecordedPage(pub Arc<Value>);
+#[cfg_attr(not(feature = "devtools"), allow(dead_code))]
+pub(crate) struct RecordedPage {
+    pub page: Arc<Value>,
+    pub source: Option<&'static std::panic::Location<'static>>,
+}
 
 /// An empty response that points the client at `location` through `header`.
 pub(crate) fn redirect(status: StatusCode, header: HeaderName, location: &str) -> Response<Body> {
@@ -291,10 +309,14 @@ pub(crate) fn version_mismatch(location: &str, version: &str) -> Response<Body> 
 
 pub(crate) async fn finish_with_flash(
     mut response: Response<Body>,
-    pending: crate::session::Flash,
+    mut pending: crate::session::Flash,
     per: &PerRequest,
 ) -> Response<Body> {
     if let Some(session) = &per.config.session {
+        // The previous URL is not one-shot: carry it on.
+        if pending.previous_url.is_none() {
+            pending.previous_url = per.flash.previous_url.clone();
+        }
         session
             .write(response.headers_mut(), &per.req_extensions, pending)
             .await;

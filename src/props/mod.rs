@@ -9,15 +9,30 @@ pub use always::Always;
 pub use merge::Merge;
 pub use prop::{Prop, ScrollMetadata};
 
-/// Sentinel object key that marks a value as wrapped in [`Always`].
+/// Sentinel object keys that mark a value as wrapped in [`Always`] / [`Merge`].
 ///
-/// The wrapper serializes as `{ALWAYS_SENTINEL: <inner>}`, and the resolver
-/// strips the sentinel back out after recording the path. The key is namespaced
-/// so user data is implausibly unlikely to collide.
-pub(crate) const ALWAYS_SENTINEL: &str = "$$veer_always$$";
-/// Sentinel object key that marks a value as wrapped in [`Merge`]. See
-/// [`ALWAYS_SENTINEL`].
-pub(crate) const MERGE_SENTINEL: &str = "$$veer_merge$$";
+/// A wrapper serializes as `{<sentinel>: <inner>}`, and the resolver strips the
+/// sentinel back out after recording the path. The keys have a random suffix
+/// for each process, so that user data cannot contain them.
+pub(crate) struct Sentinels {
+    pub always: String,
+    pub merge: String,
+}
+
+pub(crate) fn sentinels() -> &'static Sentinels {
+    use std::hash::{BuildHasher, Hasher};
+    static SENTINELS: std::sync::OnceLock<Sentinels> = std::sync::OnceLock::new();
+    SENTINELS.get_or_init(|| {
+        // `RandomState` is seeded from the OS for each process.
+        let nonce = std::collections::hash_map::RandomState::new()
+            .build_hasher()
+            .finish();
+        Sentinels {
+            always: format!("$$veer_always_{nonce:016x}$$"),
+            merge: format!("$$veer_merge_{nonce:016x}$$"),
+        }
+    })
+}
 
 #[cfg(test)]
 mod tests {
@@ -46,8 +61,8 @@ mod tests {
             serde_json::to_value(&p).unwrap(),
             json!({
                 "users": ["a", "b"],
-                "cached": {ALWAYS_SENTINEL: 42},
-                "notifs": {MERGE_SENTINEL: ["x"]},
+                "cached": {sentinels().always.as_str(): 42},
+                "notifs": {sentinels().merge.as_str(): ["x"]},
             })
         );
     }
