@@ -27,7 +27,15 @@ where
     }
 }
 
-/// Helper to wrap a closure as a boxed `SharedProps` trait object.
+#[async_trait]
+impl SharedProps for Arc<dyn SharedProps> {
+    async fn shared(&self, req: &RequestInfo) -> Value {
+        (**self).shared(req).await
+    }
+}
+
+/// Helper to wrap a closure as a boxed `SharedProps` trait object. Pass the
+/// result to [`crate::InertiaConfig::shared`].
 pub fn shared_props_fn<F, Fut>(f: F) -> Arc<dyn SharedProps>
 where
     F: Fn(&RequestInfo) -> Fut + Send + Sync + 'static,
@@ -47,5 +55,7 @@ mod tests {
         let s = shared_props_fn(|_r| async { json!({"x": 1}) });
         let r = RequestInfo::from_parts(http::Method::GET, "/".into(), &HeaderMap::new());
         assert_eq!(s.shared(&r).await, json!({"x": 1}));
+        // The helper's result goes straight into the config.
+        let _ = crate::InertiaConfig::new().shared(s);
     }
 }

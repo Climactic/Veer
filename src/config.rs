@@ -1,12 +1,16 @@
 //! Configuration assembled at app startup.
 
+use crate::props::prop::BoxedJsonFuture;
+use crate::request::RequestInfo;
 use crate::root_view::{MinimalRootView, RootView};
 use crate::session::SessionStore;
 use crate::shared::SharedProps;
 use crate::ssr::SsrClient;
 use std::borrow::Cow;
+use std::future::Future;
 use std::sync::Arc;
 
+pub(crate) type SharedOnceFn = Arc<dyn Fn(&RequestInfo) -> BoxedJsonFuture + Send + Sync>;
 type VersionFn = Arc<dyn Fn() -> Cow<'static, str> + Send + Sync>;
 
 /// Top-level app config. Built once at startup, cloned by Arc into each request.
@@ -19,6 +23,13 @@ pub struct InertiaConfig {
     pub(crate) ssr_required: bool,
     pub(crate) csr_only: bool,
     pub(crate) shared: Option<Arc<dyn SharedProps>>,
+    pub(crate) shared_once: Vec<(String, SharedOnceFn)>,
+    pub(crate) encrypt_history: bool,
+    pub(crate) preserve_big_integers: bool,
+    pub(crate) with_all_errors: bool,
+    pub(crate) store_previous_url: bool,
+    #[cfg(feature = "devtools")]
+    pub(crate) devtools: Option<crate::devtools::DevTools>,
 }
 
 impl Default for InertiaConfig {
@@ -31,6 +42,13 @@ impl Default for InertiaConfig {
             ssr_required: false,
             csr_only: false,
             shared: None,
+            shared_once: Vec::new(),
+            encrypt_history: false,
+            preserve_big_integers: false,
+            with_all_errors: false,
+            store_previous_url: false,
+            #[cfg(feature = "devtools")]
+            devtools: None,
         }
     }
 }
@@ -83,6 +101,71 @@ impl InertiaConfig {
     /// Set shared props.
     pub fn shared<P: SharedProps + 'static>(mut self, p: P) -> Self {
         self.shared = Some(Arc::new(p));
+        self
+    }
+
+    /// Share a once prop with every page. The closure runs only when the
+    /// client does not hold the value yet. A handler prop with the same key wins.
+    pub fn share_once<F, Fut, T>(mut self, key: impl Into<String>, f: F) -> Self
+    where
+        F: Fn(&RequestInfo) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = T> + Send + 'static,
+        T: serde::Serialize,
+    {
+        self.shared_once.push((
+            key.into(),
+            Arc::new(move |req| {
+                let value = f(req);
+                Box::pin(async { crate::props::prop::to_json(value.await) })
+            }),
+        ));
+        self
+    }
+
+    /// Store the URL of each page visit in the session, so that
+    /// [`crate::Inertia::back`] has a target when the request has no `Referer`
+    /// header. Needs a session store. Partial reloads and prefetches are not
+    /// stored.
+    pub fn store_previous_url(mut self, on: bool) -> Self {
+        self.store_previous_url = on;
+        self
+    }
+
+    /// Set `encryptHistory: true` on every page.
+    pub fn encrypt_history(mut self, on: bool) -> Self {
+        self.encrypt_history = on;
+        self
+    }
+
+    /// Record each request for the Inertia DevTools browser extension. The
+    /// read API is open unless you set [`crate::DevTools::authorize`], so
+    /// enable this in development only:
+    ///
+    /// ```
+    /// # use veer::{DevTools, InertiaConfig};
+    /// let mut config = InertiaConfig::new();
+    /// if cfg!(debug_assertions) {
+    ///     config = config.devtools(DevTools::new());
+    /// }
+    /// ```
+    #[cfg(feature = "devtools")]
+    pub fn devtools(mut self, devtools: crate::devtools::DevTools) -> Self {
+        self.devtools = Some(devtools);
+        self
+    }
+
+    /// Send all validation messages of a field as an array in `props.errors`.
+    /// The default sends the first message as a string.
+    pub fn with_all_errors(mut self, on: bool) -> Self {
+        self.with_all_errors = on;
+        self
+    }
+
+    /// Send integers outside the JavaScript safe range as `$bigint` markers on
+    /// every page. [`crate::InertiaResponse::preserve_big_integers`] overrides
+    /// this for one response.
+    pub fn preserve_big_integers(mut self, on: bool) -> Self {
+        self.preserve_big_integers = on;
         self
     }
 }

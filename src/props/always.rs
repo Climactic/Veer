@@ -8,10 +8,10 @@ use serde::{Serialize, Serializer};
 /// Detected anywhere in the props tree, through any serialization path
 /// (typed `#[derive(Serialize)]` structs, `serde_json::json!`, hand-built
 /// `Value`s, etc.). The wrapper serializes as a single-key sentinel object
-/// that the Inertia resolver strips before sending to the client. The Inertia
-/// protocol only honors the rule at the top level of a render's props —
-/// wrappers at deeper paths are still detected and stripped but have no
-/// wire-format meaning.
+/// that the Inertia resolver strips before sending to the client. A nested
+/// wrapper keeps its value when the partial reload selects its parent. When the
+/// parent is not selected, the parent is not sent: the client replaces
+/// top-level props as a whole, so a partial parent would lose its other fields.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Always<T>(pub T);
 
@@ -25,7 +25,7 @@ impl<T> Always<T> {
 impl<T: Serialize> Serialize for Always<T> {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         let mut map = s.serialize_map(Some(1))?;
-        map.serialize_entry(super::ALWAYS_SENTINEL, &self.0)?;
+        map.serialize_entry(&super::sentinels().always, &self.0)?;
         map.end()
     }
 }
@@ -34,17 +34,17 @@ impl<T: Serialize> Serialize for Always<T> {
 impl<T: ts_rs::TS> ts_rs::TS for Always<T> {
     type WithoutGenerics = <T as ts_rs::TS>::WithoutGenerics;
     type OptionInnerType = <T as ts_rs::TS>::OptionInnerType;
-    fn ident() -> String {
-        <T as ts_rs::TS>::ident()
+    fn ident(cfg: &ts_rs::Config) -> String {
+        <T as ts_rs::TS>::ident(cfg)
     }
-    fn name() -> String {
-        <T as ts_rs::TS>::name()
+    fn name(cfg: &ts_rs::Config) -> String {
+        <T as ts_rs::TS>::name(cfg)
     }
-    fn inline() -> String {
-        <T as ts_rs::TS>::inline()
+    fn inline(cfg: &ts_rs::Config) -> String {
+        <T as ts_rs::TS>::inline(cfg)
     }
-    fn inline_flattened() -> String {
-        <T as ts_rs::TS>::inline_flattened()
+    fn inline_flattened(cfg: &ts_rs::Config) -> String {
+        <T as ts_rs::TS>::inline_flattened(cfg)
     }
     fn visit_dependencies(v: &mut impl ts_rs::TypeVisitor)
     where
@@ -58,11 +58,11 @@ impl<T: ts_rs::TS> ts_rs::TS for Always<T> {
     {
         <T as ts_rs::TS>::visit_generics(v);
     }
-    fn decl() -> String {
-        <T as ts_rs::TS>::decl()
+    fn decl(cfg: &ts_rs::Config) -> String {
+        <T as ts_rs::TS>::decl(cfg)
     }
-    fn decl_concrete() -> String {
-        <T as ts_rs::TS>::decl_concrete()
+    fn decl_concrete(cfg: &ts_rs::Config) -> String {
+        <T as ts_rs::TS>::decl_concrete(cfg)
     }
     fn output_path() -> Option<std::path::PathBuf> {
         <T as ts_rs::TS>::output_path()

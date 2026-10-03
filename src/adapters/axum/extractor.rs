@@ -17,6 +17,10 @@ pub(crate) struct PerRequest {
     /// `SessionStore::write` hook can recover session middleware handles
     /// (`tower-sessions::Session`, etc.) that live in request extensions.
     pub req_extensions: Arc<Extensions>,
+    /// Id of the DevTools entry of this request, when the recorder is on.
+    pub devtools_id: Option<String>,
+    /// URL of the last page visit, when `store_previous_url` is on.
+    pub previous_url: Option<String>,
 }
 
 impl<S> FromRequestParts<S> for Inertia
@@ -42,10 +46,9 @@ where
             .map(|p| p.as_str().to_string())
             .unwrap_or_else(|| parts.uri.path().to_string());
         let req_info = RequestInfo::from_parts(parts.method.clone(), url, &parts.headers);
-        Ok(Inertia::from_parts(
-            per.config,
-            req_info,
-            (*per.flash).clone(),
-        ))
+        let previous_url = per.previous_url.clone();
+        let mut inertia = Inertia::from_parts(per.config, req_info, (*per.flash).clone());
+        inertia.previous_url = previous_url;
+        Ok(inertia)
     }
 }

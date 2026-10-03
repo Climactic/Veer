@@ -11,6 +11,7 @@ use std::time::Duration;
 pub struct HttpSsrClient {
     client: reqwest::Client,
     url: String,
+    timeout: Option<Duration>,
 }
 
 impl HttpSsrClient {
@@ -20,10 +21,7 @@ impl HttpSsrClient {
             .timeout(Duration::from_secs(5))
             .build()
             .expect("reqwest client");
-        Self {
-            client,
-            url: url.into(),
-        }
+        Self::with_client(client, url)
     }
 
     /// Construct with a custom `reqwest::Client`.
@@ -31,7 +29,26 @@ impl HttpSsrClient {
         Self {
             client,
             url: url.into(),
+            timeout: None,
         }
+    }
+
+    /// Set the timeout of each request to the SSR server (default 5 seconds
+    /// with [`Self::new`]).
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
+    /// `true` if the SSR server answers `GET /health`. Use it to wait for the
+    /// server at startup.
+    pub async fn health(&self) -> bool {
+        let base = self.url.strip_suffix("/render").unwrap_or(&self.url);
+        let mut request = self.client.get(format!("{base}/health"));
+        if let Some(timeout) = self.timeout {
+            request = request.timeout(timeout);
+        }
+        request.send().await.is_ok_and(|r| r.status().is_success())
     }
 }
 
@@ -46,15 +63,19 @@ struct WireResponse {
 #[async_trait]
 impl SsrClient for HttpSsrClient {
     async fn render(&self, page: &Value) -> Result<SsrPayload, SsrError> {
-        let resp = self
-            .client
-            .post(&self.url)
-            .json(page)
+        let mut request = self.client.post(&self.url).json(page);
+        if let Some(timeout) = self.timeout {
+            request = request.timeout(timeout);
+        }
+        let resp = request
             .send()
             .await
             .map_err(|e| SsrError::Transport(e.to_string()))?;
         if !resp.status().is_success() {
-            return Err(SsrError::Transport(format!("status {}", resp.status())));
+            // A failed render returns JSON with `error`, `type` and `hint`.
+            let status = resp.status();
+            let detail = resp.text().await.unwrap_or_default();
+            return Err(SsrError::Transport(format!("status {status}: {detail}")));
         }
         let body: WireResponse = resp
             .json()

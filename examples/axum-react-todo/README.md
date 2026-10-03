@@ -3,6 +3,12 @@
 End-to-end demo of `veer` driving a React + Vite frontend. Runs in two modes
 from the same binary, toggled by an env flag.
 
+## What it shows
+
+- `/todos`: a list with create and delete, validation errors, flash messages, and Precognition live validation on the create form.
+- `/showcase`: a once prop, a deferred prop, a rescued prop, infinite scroll, a fragment redirect, and a big integer, with TypeScript types generated from the Rust structs (`src/todos.rs`).
+- The DevTools recorder is on in debug builds.
+
 ## Run
 
 From this directory:
@@ -22,7 +28,7 @@ If you don't have `just`: `cargo install just` (or `brew install just`).
 Pure client-side bootstrap — Vite owns the browser, Rust owns the data.
 
 1. Browser loads `http://localhost:5173/` → Vite serves `index.html`.
-2. `frontend/app.tsx` runs, does a single `fetch` with `X-Inertia: true` for the current URL.
+2. `frontend/app.tsx` runs, does a single `fetch` with `X-Inertia: true` for the current URL, and puts the result into the page's `<script data-page>` tag.
 3. Vite's proxy forwards it to the Rust backend on `:3000`.
 4. Rust returns the page object as JSON (made unambiguous by `csr_only(true)`).
 5. `createInertiaApp` mounts with `createRoot`. Subsequent navigations are XHRs through the same proxy.

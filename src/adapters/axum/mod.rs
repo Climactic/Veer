@@ -3,6 +3,7 @@
 pub mod extractor;
 pub mod form;
 pub mod layer;
+pub mod precognition;
 pub mod response;
 pub mod router;
 
@@ -14,6 +15,7 @@ pub mod embed;
 
 pub use form::{InertiaForm, InertiaFormRejection};
 pub use layer::InertiaLayer;
+pub use precognition::Precognition;
 pub use router::{Method, Router};
 
 #[cfg(feature = "csrf")]

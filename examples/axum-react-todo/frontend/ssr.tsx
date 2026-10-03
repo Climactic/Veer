@@ -4,7 +4,7 @@
 //
 // Pages are imported into a static map rather than via Vite's
 // `import.meta.glob` — that's a Vite-specific transform Bun doesn't apply
-// when running this file directly, and a 3-page demo doesn't need the
+// when running this file directly, and a 4-page demo doesn't need the
 // dynamic version. For production, swap to `vite build --ssr frontend/ssr.tsx`
 // and run the built bundle; the SSR adapter compiles the glob away anyway.
 
@@ -14,11 +14,13 @@ import ReactDOMServer from "react-dom/server";
 import type { ComponentType } from "react";
 
 import Home from "./pages/home";
+import Showcase from "./pages/showcase";
 import TodosIndex from "./pages/todos/index";
 import TodosCreate from "./pages/todos/create";
 
 const pages: Record<string, ComponentType<any>> = {
   home: Home,
+  showcase: Showcase,
   "todos/index": TodosIndex,
   "todos/create": TodosCreate,
 };

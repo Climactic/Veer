@@ -3,8 +3,8 @@
 //!
 //! Inspired by Laravel's Ziggy / Wayfinder: downstream apps mark their prop
 //! structs with [`register_page!`](crate::register_page) and register routes
-//! via [`register_routes!`](crate::register_routes), then a test calls
-//! [`generate`] to emit a single bundled TypeScript file the frontend imports.
+//! via [`crate::Router::named_route`], then a small binary calls [`generate`]
+//! to emit a single bundled TypeScript file the frontend imports.
 //!
 //! Gated behind the `ts` feature.
 //!
@@ -74,8 +74,47 @@ pub trait InertiaPageProps {
 ///
 /// veer::register_page!(UsersIndexProps, "Users/Index");
 /// ```
+///
+/// Props that the handler attaches as closures (`once`, `deferred`, `lazy`,
+/// `Prop::scroll`, …) are not fields of the props struct. Describe them in a
+/// second struct (it needs only `ts_rs::TS`) and pass it as the third
+/// argument; the page's TS props type is then the intersection of the two:
+///
+/// ```ignore
+/// #[derive(TS)]
+/// #[ts(export)]
+/// struct UsersIndexClosureProps {
+///     plans: Vec<Plan>,            // once prop: always present
+///     #[ts(optional)]
+///     stats: Option<Stats>,        // deferred prop: absent on first render
+/// }
+///
+/// veer::register_page!(UsersIndexProps, "Users/Index", UsersIndexClosureProps);
+/// ```
 #[macro_export]
 macro_rules! register_page {
+    ($ty:ty, $component:literal, $closure_ty:ty) => {
+        impl $crate::bindings::InertiaPageProps for $ty {
+            const COMPONENT: &'static str = $component;
+        }
+        $crate::__private::inventory::submit! {
+            $crate::bindings::PageEntry {
+                component: $component,
+                ts_name: || {
+                    let cfg = $crate::__private::ts_rs::Config::from_env();
+                    format!(
+                        "{} & {}",
+                        <$ty as $crate::__private::ts_rs::TS>::ident(&cfg),
+                        <$closure_ty as $crate::__private::ts_rs::TS>::ident(&cfg),
+                    )
+                },
+                collect_decls: |out| {
+                    $crate::bindings::collect_decls::<$ty>(out);
+                    $crate::bindings::collect_decls::<$closure_ty>(out);
+                },
+            }
+        }
+    };
     ($ty:ty, $component:literal) => {
         impl $crate::bindings::InertiaPageProps for $ty {
             const COMPONENT: &'static str = $component;
@@ -83,7 +122,11 @@ macro_rules! register_page {
         $crate::__private::inventory::submit! {
             $crate::bindings::PageEntry {
                 component: $component,
-                ts_name: || <$ty as $crate::__private::ts_rs::TS>::ident(),
+                ts_name: || {
+                    <$ty as $crate::__private::ts_rs::TS>::ident(
+                        &$crate::__private::ts_rs::Config::from_env(),
+                    )
+                },
                 collect_decls: |out| $crate::bindings::collect_decls::<$ty>(out),
             }
         }
@@ -117,7 +160,8 @@ pub fn collect_decls<T: ts_rs::TS + 'static + ?Sized>(out: &mut HashMap<TypeId, 
         return;
     }
     if T::output_path().is_some() {
-        out.insert(id, (T::ident(), T::decl()));
+        let cfg = ts_rs::Config::from_env();
+        out.insert(id, (T::ident(&cfg), T::decl(&cfg)));
     } else {
         // mark seen so we don't loop, but don't emit a decl
         out.insert(id, (String::new(), String::new()));
@@ -363,15 +407,29 @@ export interface PageObject<P = Pages> {
   version: string;
   encryptHistory?: boolean;
   clearHistory?: boolean;
+  preserveFragment?: boolean;
+  preserveBigIntegers?: boolean;
+  sharedProps?: string[];
   mergeProps?: string[];
-  resetMergeProps?: string[];
+  prependProps?: string[];
+  deepMergeProps?: string[];
+  matchPropsOn?: string[];
   deferredProps?: Record<string, string[]>;
+  rescuedProps?: string[];
+  scrollProps?: Record<string, ScrollProp>;
+  onceProps?: Record<string, { prop: string; expiresAt: number | null }>;
+  flash?: Flash;
+}
+
+export interface ScrollProp {
+  pageName: string;
+  previousPage: number | string | null;
+  nextPage: number | string | null;
+  currentPage: number | string | null;
+  reset: boolean;
 }
 
 export type ErrorBag = Record<string, string>;
 
-export interface Flash {
-  errors: ErrorBag;
-  bags: Record<string, unknown>;
-}
+export type Flash = Record<string, unknown>;
 "#;

@@ -63,26 +63,16 @@ async fn encrypt_and_clear_history_flags_serialize_on_wire() {
 }
 
 #[tokio::test]
-async fn reset_merge_props_from_builder_serialize_on_wire() {
+async fn x_inertia_reset_request_header_removes_the_merge_label() {
     let cfg = InertiaConfig::new().version(|| "v1".into());
     let app = Router::new()
         .route(
             "/",
-            get(|i: Inertia| async move { i.render("Home", json!({})).reset_merge(["notifs"]) }),
-        )
-        .layer(InertiaLayer::new(cfg));
-    let resp = app.oneshot(req_inertia("GET", "/", "v1")).await.unwrap();
-    let page = body_json(resp).await;
-    assert_eq!(page["resetMergeProps"], json!(["notifs"]));
-}
-
-#[tokio::test]
-async fn x_inertia_reset_request_header_propagates_to_reset_merge_props() {
-    let cfg = InertiaConfig::new().version(|| "v1".into());
-    let app = Router::new()
-        .route(
-            "/",
-            get(|i: Inertia| async move { i.render("Home", json!({})) }),
+            get(|i: Inertia| async move {
+                i.render("Home", json!({"alpha": [1], "beta": [2]}))
+                    .merge("alpha")
+                    .merge("beta")
+            }),
         )
         .layer(InertiaLayer::new(cfg));
     let r = http::Request::builder()
@@ -90,13 +80,14 @@ async fn x_inertia_reset_request_header_propagates_to_reset_merge_props() {
         .uri("/")
         .header("x-inertia", "true")
         .header("x-inertia-version", "v1")
-        .header("x-inertia-reset", "alpha,beta")
+        .header("x-inertia-reset", "alpha")
         .body(axum::body::Body::empty())
         .unwrap();
     let resp = app.oneshot(r).await.unwrap();
     let page = body_json(resp).await;
-    // Sorted by finalize().
-    assert_eq!(page["resetMergeProps"], json!(["alpha", "beta"]));
+    // A reset prop is sent, but without a merge label, so the client replaces it.
+    assert_eq!(page["props"]["alpha"], json!([1]));
+    assert_eq!(page["mergeProps"], json!(["beta"]));
 }
 
 // =============================================================================
@@ -112,10 +103,25 @@ async fn external_redirect_via_location_returns_409_with_inertia_location_header
             get(|i: Inertia| async move { i.location("https://accounts.example.com/auth") }),
         )
         .layer(InertiaLayer::new(cfg));
-    let resp = app.oneshot(req("GET", "/oauth")).await.unwrap();
+    let resp = app
+        .clone()
+        .oneshot(req_inertia("GET", "/oauth", "v1"))
+        .await
+        .unwrap();
     assert_eq!(resp.status(), 409);
+    // A manual location carries no version header; that is how the client
+    // tells it apart from an asset version change.
+    assert!(resp.headers().get("x-inertia-version").is_none());
     assert_eq!(
         resp.headers().get("x-inertia-location").unwrap(),
+        "https://accounts.example.com/auth"
+    );
+
+    // A plain browser request follows a normal redirect.
+    let resp = app.oneshot(req("GET", "/oauth")).await.unwrap();
+    assert_eq!(resp.status(), 302);
+    assert_eq!(
+        resp.headers().get("location").unwrap(),
         "https://accounts.example.com/auth"
     );
 }
@@ -129,7 +135,10 @@ async fn external_redirect_works_from_post_too() {
             post(|i: Inertia| async move { i.location("https://stripe.example.com/session") }),
         )
         .layer(InertiaLayer::new(cfg));
-    let resp = app.oneshot(req("POST", "/checkout")).await.unwrap();
+    let resp = app
+        .oneshot(req_inertia("POST", "/checkout", "v1"))
+        .await
+        .unwrap();
     assert_eq!(resp.status(), 409);
     assert!(resp
         .headers()
@@ -293,7 +302,7 @@ async fn flashed_errors_appear_as_shared_prop_on_next_get() {
     // Pre-seed the mock session as if a previous request flashed errors.
     {
         let mut g = session.store.lock().await;
-        g.errors.insert("name".into(), "is required".into());
+        g.errors.insert("name".into(), vec!["is required".into()]);
     }
     let cfg = InertiaConfig::new()
         .version(|| "v1".into())
@@ -313,7 +322,7 @@ async fn flashed_errors_appear_as_shared_prop_on_next_get() {
 }
 
 #[tokio::test]
-async fn flashed_messages_appear_under_flash_prop() {
+async fn flashed_messages_appear_under_page_flash() {
     let session = MockSession::default();
     {
         let mut g = session.store.lock().await;
@@ -333,7 +342,8 @@ async fn flashed_messages_appear_under_flash_prop() {
         .await
         .unwrap();
     let page = body_json(resp).await;
-    assert_eq!(page["props"]["flash"]["success"], "Created");
+    assert_eq!(page["flash"]["success"], "Created");
+    assert!(page["props"].get("flash").is_none());
 }
 
 #[cfg(feature = "cookie-session")]

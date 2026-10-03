@@ -11,6 +11,18 @@ pub mod validator;
 pub trait IntoErrorBag {
     /// Flatten into `{field: first_message}`.
     fn into_error_bag(self) -> HashMap<String, String>;
+
+    /// Flatten into `{field: [all messages]}`. The default has one message per
+    /// field; the `validator` and `garde` impls keep all of them.
+    fn into_all_errors(self) -> HashMap<String, Vec<String>>
+    where
+        Self: Sized,
+    {
+        self.into_error_bag()
+            .into_iter()
+            .map(|(field, message)| (field, vec![message]))
+            .collect()
+    }
 }
 
 impl IntoErrorBag for HashMap<String, String> {
