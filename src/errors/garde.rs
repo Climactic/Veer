@@ -9,6 +9,16 @@ impl IntoErrorBag for garde::Report {
             .map(|(path, error)| (path.to_string(), error.message().to_string()))
             .collect()
     }
+
+    fn into_all_errors(self) -> HashMap<String, Vec<String>> {
+        let mut all: HashMap<String, Vec<String>> = HashMap::new();
+        for (path, error) in self.iter() {
+            all.entry(path.to_string())
+                .or_default()
+                .push(error.message().to_string());
+        }
+        all
+    }
 }
 
 #[cfg(test)]

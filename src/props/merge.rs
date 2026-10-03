@@ -8,10 +8,9 @@ use serde::{Serialize, Serializer};
 /// Detected anywhere in the props tree, through any serialization path
 /// (typed `#[derive(Serialize)]` structs, `serde_json::json!`, hand-built
 /// `Value`s, etc.). The wrapper serializes as a single-key sentinel object
-/// that the Inertia resolver strips before sending to the client. Top-level
-/// wrappers are recorded in `page.mergeProps` per the Inertia protocol;
-/// deeper-nested wrappers are detected and stripped, but the wire format has
-/// no notion of "nested merge prop" so they have no semantic effect today.
+/// that the Inertia resolver strips before sending to the client. The dot
+/// path of each wrapper is recorded in `page.mergeProps`, so a nested wrapper
+/// (`posts.data`) merges at that path.
 ///
 /// [`crate::response::InertiaResponse::merge`] provides the same effect via
 /// builder-style API.
@@ -37,17 +36,17 @@ impl<T: Serialize> Serialize for Merge<T> {
 impl<T: ts_rs::TS> ts_rs::TS for Merge<T> {
     type WithoutGenerics = <T as ts_rs::TS>::WithoutGenerics;
     type OptionInnerType = <T as ts_rs::TS>::OptionInnerType;
-    fn ident() -> String {
-        <T as ts_rs::TS>::ident()
+    fn ident(cfg: &ts_rs::Config) -> String {
+        <T as ts_rs::TS>::ident(cfg)
     }
-    fn name() -> String {
-        <T as ts_rs::TS>::name()
+    fn name(cfg: &ts_rs::Config) -> String {
+        <T as ts_rs::TS>::name(cfg)
     }
-    fn inline() -> String {
-        <T as ts_rs::TS>::inline()
+    fn inline(cfg: &ts_rs::Config) -> String {
+        <T as ts_rs::TS>::inline(cfg)
     }
-    fn inline_flattened() -> String {
-        <T as ts_rs::TS>::inline_flattened()
+    fn inline_flattened(cfg: &ts_rs::Config) -> String {
+        <T as ts_rs::TS>::inline_flattened(cfg)
     }
     fn visit_dependencies(v: &mut impl ts_rs::TypeVisitor)
     where
@@ -61,11 +60,11 @@ impl<T: ts_rs::TS> ts_rs::TS for Merge<T> {
     {
         <T as ts_rs::TS>::visit_generics(v);
     }
-    fn decl() -> String {
-        <T as ts_rs::TS>::decl()
+    fn decl(cfg: &ts_rs::Config) -> String {
+        <T as ts_rs::TS>::decl(cfg)
     }
-    fn decl_concrete() -> String {
-        <T as ts_rs::TS>::decl_concrete()
+    fn decl_concrete(cfg: &ts_rs::Config) -> String {
+        <T as ts_rs::TS>::decl_concrete(cfg)
     }
     fn output_path() -> Option<std::path::PathBuf> {
         <T as ts_rs::TS>::output_path()

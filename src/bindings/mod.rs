@@ -3,8 +3,8 @@
 //!
 //! Inspired by Laravel's Ziggy / Wayfinder: downstream apps mark their prop
 //! structs with [`register_page!`](crate::register_page) and register routes
-//! via [`register_routes!`](crate::register_routes), then a test calls
-//! [`generate`] to emit a single bundled TypeScript file the frontend imports.
+//! via [`crate::Router::named_route`], then a small binary calls [`generate`]
+//! to emit a single bundled TypeScript file the frontend imports.
 //!
 //! Gated behind the `ts` feature.
 //!
@@ -83,7 +83,11 @@ macro_rules! register_page {
         $crate::__private::inventory::submit! {
             $crate::bindings::PageEntry {
                 component: $component,
-                ts_name: || <$ty as $crate::__private::ts_rs::TS>::ident(),
+                ts_name: || {
+                    <$ty as $crate::__private::ts_rs::TS>::ident(
+                        &$crate::__private::ts_rs::Config::from_env(),
+                    )
+                },
                 collect_decls: |out| $crate::bindings::collect_decls::<$ty>(out),
             }
         }
@@ -117,7 +121,8 @@ pub fn collect_decls<T: ts_rs::TS + 'static + ?Sized>(out: &mut HashMap<TypeId, 
         return;
     }
     if T::output_path().is_some() {
-        out.insert(id, (T::ident(), T::decl()));
+        let cfg = ts_rs::Config::from_env();
+        out.insert(id, (T::ident(&cfg), T::decl(&cfg)));
     } else {
         // mark seen so we don't loop, but don't emit a decl
         out.insert(id, (String::new(), String::new()));
@@ -363,15 +368,29 @@ export interface PageObject<P = Pages> {
   version: string;
   encryptHistory?: boolean;
   clearHistory?: boolean;
+  preserveFragment?: boolean;
+  preserveBigIntegers?: boolean;
+  sharedProps?: string[];
   mergeProps?: string[];
-  resetMergeProps?: string[];
+  prependProps?: string[];
+  deepMergeProps?: string[];
+  matchPropsOn?: string[];
   deferredProps?: Record<string, string[]>;
+  rescuedProps?: string[];
+  scrollProps?: Record<string, ScrollProp>;
+  onceProps?: Record<string, { prop: string; expiresAt: number | null }>;
+  flash?: Flash;
+}
+
+export interface ScrollProp {
+  pageName: string;
+  previousPage: number | string | null;
+  nextPage: number | string | null;
+  currentPage: number | string | null;
+  reset: boolean;
 }
 
 export type ErrorBag = Record<string, string>;
 
-export interface Flash {
-  errors: ErrorBag;
-  bags: Record<string, unknown>;
-}
+export type Flash = Record<string, unknown>;
 "#;

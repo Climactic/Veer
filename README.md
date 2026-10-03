@@ -12,7 +12,7 @@ Build modern single-page apps in React, Vue, or Svelte — without writing a JSO
 [![Latest Version on crates.io](https://img.shields.io/crates/v/veer.svg?style=for-the-badge)](https://crates.io/crates/veer)
 [![GitHub CI Status](https://img.shields.io/github/actions/workflow/status/climactic/veer/ci.yml?branch=main&label=ci&style=for-the-badge)](https://github.com/climactic/veer/actions?query=workflow%3Aci+branch%3Amain)
 [![docs.rs](https://img.shields.io/docsrs/veer?style=for-the-badge)](https://docs.rs/veer)
-[![MSRV 1.85](https://img.shields.io/badge/MSRV-1.85-blue?style=for-the-badge)](https://www.rust-lang.org)
+[![MSRV 1.88](https://img.shields.io/badge/MSRV-1.88-blue?style=for-the-badge)](https://www.rust-lang.org)
 [![Sponsor on GitHub](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?style=for-the-badge&logo=github)](https://github.com/sponsors/climactic)
 [![Support on Ko-fi](https://img.shields.io/badge/Support-Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/ClimacticCo)
 
@@ -42,7 +42,7 @@ Build modern single-page apps in React, Vue, or Svelte — without writing a JSO
 
 [Inertia.js](https://inertiajs.com) is a glue layer that lets a classic server-rendered backend drive a modern SPA frontend. The server returns a page object (component name + props); the official Inertia client adapter for React/Vue/Svelte takes care of mounting the component, hydrating props, intercepting links, and making subsequent navigations into JSON XHRs.
 
-`veer` is a clean-room Rust implementation of the server side of the [Inertia v3 protocol](https://inertiajs.com/the-protocol). It targets [axum](https://github.com/tokio-rs/axum) out of the box; the protocol core is framework-agnostic, so adapters for other Rust web frameworks slot in beside it.
+`veer` is a clean-room Rust implementation of the server side of the [Inertia v3 protocol](https://inertiajs.com/docs/v3/core-concepts/the-protocol). It targets [axum](https://github.com/tokio-rs/axum) out of the box; the protocol core is framework-agnostic, so adapters for other Rust web frameworks slot in beside it.
 
 ```text
    ┌─────────────────────────┐                       ┌─────────────────────────┐
@@ -58,7 +58,7 @@ Build modern single-page apps in React, Vue, or Svelte — without writing a JSO
 - 🦀 Pure Rust server-side implementation of Inertia v3
 - ⚡ First-class [axum](https://github.com/tokio-rs/axum) adapter (extractor + tower layer)
 - 🧩 Framework-agnostic protocol core — drop new adapters in beside the axum one
-- 📦 Partial reloads, deferred props, merge props, encrypted/clear history
+- 📦 Partial reloads, deferred / optional / once props, merge / prepend / deep-merge props, infinite scroll, flash data, encrypted/clear history, big integers, Precognition
 - 🖥️ SSR via `@inertiajs/server` (Node or Bun) with graceful fallback
 - ⚙️ Vite dev + production manifest integration that mirrors Laravel's `@vite`
 - 📤 File uploads via typed `InertiaForm` + a streaming `MultipartStream` extractor
@@ -71,7 +71,7 @@ Add `veer` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-veer = "0.1"
+veer = "0.2"
 ```
 
 Or with `cargo add`:
@@ -133,7 +133,15 @@ async fn users_create(
 
 `InertiaForm` accepts `application/json`, `application/x-www-form-urlencoded`, and (with the `multipart` feature) `multipart/form-data`. The same handler works regardless of how the Inertia client serialized the request.
 
-On the frontend, `usePage().props.errors` and `usePage().props.flash` are auto-populated whenever a `SessionStore` is configured — no extra wiring.
+On the frontend, `usePage().props.errors` and `usePage().flash` are auto-populated whenever a `SessionStore` is configured — no extra wiring. Flash data is the page object's top-level `flash`, so the client does not keep it in the history state. A request that sends `X-Inertia-Error-Bag` (the `errorBag` visit option) gets its errors nested under that bag name.
+
+For live validation ([Precognition](https://inertiajs.com/docs/v3/the-basics/forms#precognition)), answer the validation request before the action runs:
+
+```rust,ignore
+if let Some(precognition) = inertia.precognition() {
+    return precognition.respond(body.validate());   // 204, or 422 with the errors
+}
+```
 
 </details>
 
@@ -186,28 +194,56 @@ async fn oauth_start(inertia: Inertia) -> impl IntoResponse {
 }
 ```
 
-Returns 409 + `X-Inertia-Location`. The Inertia client honors this with a hard navigation.
+An Inertia request gets 409 + `X-Inertia-Location`, which the client honors with a hard navigation. A plain browser request gets a normal 302.
+
+`inertia.redirect("/docs#install")` (a target with a URL fragment) becomes 409 + `X-Inertia-Redirect` for Inertia requests, because XHR drops the fragment of a followed redirect. To keep the fragment of the *original* request instead, call `.preserve_fragment()` on the redirect.
 
 </details>
 
 <details>
-<summary><b>Partial reloads, lazy & deferred props</b></summary>
+<summary><b>Partial reloads, lazy, deferred, once, merge & scroll props</b></summary>
 
 ```rust,ignore
 inertia
-    .render("Users/Index", serde_json::json!({ "users": users }))
+    .render("Users/Index", serde_json::json!({ "users": users, "notifications": notifications }))
     .lazy("stats", || async { json!({ "hits": load_stats().await }) })
     .deferred("expensive", "dashboard", || async { json!(load_expensive().await) })
-    .merge("notifications")
+    .once("plans", || async { json!(load_plans().await) })
+    .prepend("notifications")
+    .match_on("notifications.id")
+    .prop("posts", Prop::scroll(move || async move {
+        let page = load_posts(page_no).await;
+        (json!({ "data": page.items }), ScrollMetadata::paged("page", page_no, page.has_more))
+    }))
+    .prop("permissions", Prop::try_new(|| async { load_permissions().await.map(|p| json!(p)) }).defer().rescue())
 ```
 
 | Method | Behavior |
 |---|---|
 | `lazy(key, closure)` (alias `optional`) | Closure only runs when the client requests this key via a partial reload |
 | `deferred(key, group, closure)` | First response advertises the key under `deferredProps[group]`; client then issues a follow-up reload that resolves it |
-| `merge(key)` | Marks the key so the client merges the value into existing state instead of replacing |
-| `encrypt_history()` / `clear_history()` | Set the Inertia v2+ history-state primitives |
+| `once(key, closure)` | Resolved one time; the client remembers the value across pages (`onceProps`) and the closure is skipped while the client holds it |
+| `merge(path)` / `prepend(path)` / `deep_merge(path)` | The client appends / prepends / deep-merges the value into existing state instead of replacing it. Dot paths merge a nested array (`posts.data`) |
+| `match_on("posts.id")` | Field that identifies an item, so that a merge updates it in place (`matchPropsOn`) |
+| `prop(key, Prop)` | Attach a composable closure prop (see below) |
+| `encrypt_history()` / `clear_history()` | Set the history-state primitives. `InertiaConfig::encrypt_history(true)` turns encryption on for every page |
+| `preserve_big_integers(bool)` | Send integers outside the JavaScript safe range as `{"$bigint": "…"}`, which the client (3.8+) revives as `BigInt`. `InertiaConfig::preserve_big_integers(true)` sets the default |
 | `no_ssr()` | Skip SSR for this response only |
+
+`inertia.with_errors(errors)` keeps all messages of a field. `props.errors` has the first message as a string by default; `InertiaConfig::with_all_errors(true)` sends all of them as an array.
+
+`Prop` composes the Inertia categories the way the protocol does. A dot path as key (`.prop("auth.permissions", …)`) puts the prop inside a nested object:
+
+| Constructor / modifier | Behavior |
+|---|---|
+| `Prop::new(closure)` | Resolved on full visits and on partial reloads that select it |
+| `Prop::try_new(closure)` | Closure returns `Result`. On `Err` the response is a 500, unless the prop has `.rescue()`: then the prop is left out and its key goes into `rescuedProps` (the `rescue` slot of `<Deferred>`) |
+| `Prop::scroll(closure)` | [Infinite scroll](https://inertiajs.com/docs/v3/data-props/infinite-scroll): closure returns `(value, ScrollMetadata)`; emits `scrollProps` and merges at `<key>.data` (`.wrapper("items")` changes the key). Honors the client's append/prepend intent and reset |
+| `.optional()` / `.defer()` / `.group("name")` | When the prop loads |
+| `.once()` / `.once_as("key")` / `.until(duration)` / `.fresh()` | Once behavior: custom key, expiry, forced refresh |
+| `.merge()` / `.prepend()` / `.deep_merge()` / `.append_at("data")` / `.prepend_at("data")` / `.match_on("id")` | Merge behavior, relative to the prop |
+
+Partial reloads follow the v3 rules: `only` and `except` take dot paths (`user.name`), `errors` and `Always<T>` values are always sent, and a prop named in `X-Inertia-Reset` is sent without its merge label. `InertiaConfig::share_once(key, closure)` shares a once prop with every page.
 
 </details>
 
@@ -242,7 +278,7 @@ let cfg = InertiaConfig::new()
     .ssr(HttpSsrClient::new("http://127.0.0.1:13714/render"));
 ```
 
-SSR failures fall back to client-side rendering by default. Set `ssr_required(true)` for hard-fail behavior.
+SSR failures fall back to client-side rendering by default, and the log has the error detail from the SSR server. Set `ssr_required(true)` for hard-fail behavior. `HttpSsrClient::timeout(duration)` changes the request timeout (default 5 seconds), and `client.health().await` tells you if the SSR server is up.
 
 For end-to-end SSR you'll usually combine this with `ViteRootView` (next entry) — `ViteRootView` inlines the SSR body verbatim and emits the `<script data-page>` mount the Inertia v3 client expects.
 
@@ -297,9 +333,25 @@ For SSR in production, build the sidecar with `vite build --ssr frontend/ssr.tsx
 </details>
 
 <details>
+<summary><b>Inertia DevTools</b></summary>
+
+veer implements the [DevTools protocol](https://inertiajs.com/docs/v3/advanced/devtools-protocol), so the Inertia DevTools browser extension shows each request with its props, headers and route.
+
+```rust,ignore
+let mut cfg = InertiaConfig::new();
+if cfg!(debug_assertions) {
+    cfg = cfg.devtools(veer::DevTools::new());
+}
+```
+
+`InertiaLayer` then records one entry for each request (in memory, the 100 newest for each browser tab), adds the `X-Inertia-Devtools-Id` headers, and serves `GET /_inertia/devtools/entries[/{id}]`. Sensitive keys (`password`, `token`, …) and headers (`Cookie`, `Authorization`, …) are redacted. The read API is open by default, so enable the recorder in development only; `DevTools::new().authorize(|request| …)` adds a guard. Source-location links ("open in editor") are not available.
+
+</details>
+
+<details>
 <summary><b>CSRF protection (Inertia/axios)</b></summary>
 
-The Inertia client uses axios, which reads an `XSRF-TOKEN` cookie and echoes it
+The Inertia client reads an `XSRF-TOKEN` cookie and echoes it
 back in an `X-XSRF-TOKEN` header on every mutating request — no frontend code
 needed. `CsrfLayer` is the server side of that convention: it issues the cookie
 and verifies the header using a stateless, HMAC-signed double-submit token (no
@@ -382,8 +434,8 @@ Enable the `ts` feature and the frontend gets an auto-generated `gen/` directory
 
 ```toml
 [dependencies]
-veer = { version = "0.1", features = ["ts"] }
-ts-rs = "10"
+veer = { version = "0.2", features = ["ts"] }
+ts-rs = "12"
 ```
 
 Annotate each prop struct and register it as a page:
@@ -605,7 +657,9 @@ The protocol core has zero I/O and zero framework deps — pure data structures 
 
 ## ⚠️ Caveats
 
-> `Always<T>` and `Merge<T>` are detected at any depth and through any serialization path — typed `#[derive(Serialize)]` structs, `serde_json::json!`, hand-built `Value`s, mixed maps. Only top-level matches affect the Inertia wire format though, because the protocol has no notion of a "nested merge prop". Wrappers placed deeper are still stripped from the JSON sent to the client; they just don't appear in `mergeProps`.
+> `Always<T>` and `Merge<T>` are detected at any depth and through any serialization path — typed `#[derive(Serialize)]` structs, `serde_json::json!`, hand-built `Value`s, mixed maps. A nested wrapper acts at its dot path: `Merge` adds the path (`posts.data`) to `mergeProps`, and `Always` keeps the value through partial-reload filters.
+>
+> An empty `200` response to an Inertia request becomes a redirect back (`Referer`, or `/`), as in the Laravel adapter, because the client cannot render it.
 
 ## 🧪 Example App
 
@@ -623,7 +677,7 @@ bun dev
 
 ## 🗺️ Status & Roadmap
 
-`veer` is pre-1.0. The v0.1 protocol surface is complete (all Inertia v3 features: partial reloads, deferred props, merge props, encrypted/clear history, SSR, asset versioning, validation flash). Planned for follow-ups:
+`veer` is pre-1.0. The protocol surface follows Inertia v3 as of client 3.8 / `inertia-laravel` 3.5 (partial reloads, deferred / optional / once props, merge props, infinite scroll, flash data, history encryption, fragment redirects, big integers, Precognition, SSR, asset versioning, validation errors, DevTools). Planned for follow-ups:
 
 - Adapters for `actix-web` and `rocket`
 - Typed route-param inference (today: `string | number`; goal: read each handler's `Path` extractor and emit the matching TS type)
@@ -646,7 +700,7 @@ Please see [CHANGELOG](CHANGELOG.md) for more information on what has changed re
 
 ## 🤝 Contributing
 
-Please see [CONTRIBUTING](CONTRIBUTING.md) for details.
+Issues and pull requests are welcome.
 You can also join our Discord server to discuss ideas and get help: [Discord Invite](http://go.climactic.co/discord).
 
 ## 🔒 Security Vulnerabilities

@@ -15,9 +15,24 @@ pub enum ResponseShape {
         /// Redirect destination URL.
         location: String,
     },
-    /// 409 with `X-Inertia-Location` (asset version mismatch or external redirect).
+    /// 302 redirect (external redirect on a non-Inertia request).
+    Found {
+        /// Redirect destination URL.
+        location: String,
+    },
+    /// 409 with `X-Inertia-Location` (external redirect).
     InertiaLocation {
         /// URL sent back in the `X-Inertia-Location` header.
+        location: String,
+    },
+    /// 409 with `X-Inertia-Location` and `X-Inertia-Version` (asset version mismatch).
+    VersionMismatch {
+        /// URL sent back in the `X-Inertia-Location` header.
+        location: String,
+    },
+    /// 409 with `X-Inertia-Redirect` (redirect whose target has a URL fragment).
+    InertiaRedirect {
+        /// URL sent back in the `X-Inertia-Redirect` header.
         location: String,
     },
 }
@@ -44,31 +59,39 @@ pub enum Redirect {
     External(String),
 }
 
+/// `true` if an Inertia `GET` carries an asset version that is not the server's.
+pub fn is_version_mismatch(req: &RequestInfo, server_version: &str) -> bool {
+    req.is_inertia
+        && req.method == Method::GET
+        && req.client_version.as_deref().unwrap_or("") != server_version
+}
+
 /// Pure decision function. No I/O. No serialization. Just rules.
 pub fn decide(input: DecisionInputs<'_>) -> ResponseShape {
     if let Some(r) = input.redirect {
         return match r {
-            Redirect::External(loc) => ResponseShape::InertiaLocation { location: loc },
-            Redirect::Internal(loc) => {
-                if matches!(
-                    input.req.method,
-                    Method::POST | Method::PUT | Method::PATCH | Method::DELETE
-                ) {
-                    ResponseShape::SeeOther { location: loc }
-                } else {
-                    // GET redirect (e.g. signed-route auth flow). Use 302 semantics via SeeOther.
-                    ResponseShape::SeeOther { location: loc }
-                }
+            // Inertia headers do not survive a hop to another origin, so an XHR
+            // visit gets a 409; a plain browser request follows a normal redirect.
+            Redirect::External(location) if input.req.is_inertia => {
+                ResponseShape::InertiaLocation { location }
             }
+            Redirect::External(location) => ResponseShape::Found { location },
+            // XHR drops the fragment of a followed redirect, so the client must
+            // make the visit itself.
+            Redirect::Internal(location)
+                if input.req.is_inertia && !input.req.is_prefetch && location.contains('#') =>
+            {
+                ResponseShape::InertiaRedirect { location }
+            }
+            // 303 makes the browser follow with a GET after any method.
+            Redirect::Internal(location) => ResponseShape::SeeOther { location },
         };
     }
 
     if input.req.is_inertia {
         // XHR: version mismatch on a GET → 409 reload at same URL.
-        if input.req.method == Method::GET
-            && input.req.client_version.as_deref() != Some(input.server_version)
-        {
-            return ResponseShape::InertiaLocation {
+        if is_version_mismatch(input.req, input.server_version) {
+            return ResponseShape::VersionMismatch {
                 location: input.req.url.clone(),
             };
         }
@@ -142,9 +165,54 @@ mod tests {
         });
         assert_eq!(
             d,
-            ResponseShape::InertiaLocation {
+            ResponseShape::VersionMismatch {
                 location: "/users".into()
             }
+        );
+    }
+
+    #[test]
+    fn external_redirect_on_plain_request_is_a_302() {
+        let r = req(Method::GET, "/oauth", false, None);
+        let d = decide(DecisionInputs {
+            req: &r,
+            server_version: "v1",
+            redirect: Some(Redirect::External("https://example.com/".into())),
+            csr_only: false,
+        });
+        assert_eq!(
+            d,
+            ResponseShape::Found {
+                location: "https://example.com/".into()
+            }
+        );
+    }
+
+    #[test]
+    fn fragment_redirect_is_an_inertia_redirect_unless_prefetch_or_plain() {
+        let decide_for = |r: &RequestInfo| {
+            decide(DecisionInputs {
+                req: r,
+                server_version: "v1",
+                redirect: Some(Redirect::Internal("/docs#install".into())),
+                csr_only: false,
+            })
+        };
+        let see_other = ResponseShape::SeeOther {
+            location: "/docs#install".into(),
+        };
+        let mut r = req(Method::POST, "/docs", true, Some("v1"));
+        assert_eq!(
+            decide_for(&r),
+            ResponseShape::InertiaRedirect {
+                location: "/docs#install".into()
+            }
+        );
+        r.is_prefetch = true;
+        assert_eq!(decide_for(&r), see_other);
+        assert_eq!(
+            decide_for(&req(Method::POST, "/docs", false, None)),
+            see_other
         );
     }
 

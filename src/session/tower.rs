@@ -31,37 +31,9 @@
 use super::{Flash, SessionStore};
 use async_trait::async_trait;
 use http::{request::Parts as RequestParts, Extensions, HeaderMap};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use tower_sessions::Session;
 
 const DEFAULT_KEY: &str = "_veer_flash";
-
-#[derive(Default, Serialize, Deserialize)]
-struct StoredFlash {
-    #[serde(default)]
-    errors: HashMap<String, String>,
-    #[serde(default)]
-    bags: HashMap<String, serde_json::Value>,
-}
-
-impl From<StoredFlash> for Flash {
-    fn from(s: StoredFlash) -> Self {
-        Flash {
-            errors: s.errors,
-            bags: s.bags,
-        }
-    }
-}
-
-impl From<&Flash> for StoredFlash {
-    fn from(f: &Flash) -> Self {
-        StoredFlash {
-            errors: f.errors.clone(),
-            bags: f.bags.clone(),
-        }
-    }
-}
 
 /// One-shot flash store backed by `tower-sessions`.
 #[derive(Clone, Debug)]
@@ -104,8 +76,8 @@ impl SessionStore for TowerSessionStore {
             missing_session_warning();
             return Flash::default();
         };
-        match session.remove::<StoredFlash>(&self.key).await {
-            Ok(Some(stored)) => stored.into(),
+        match session.remove::<Flash>(&self.key).await {
+            Ok(Some(stored)) => stored,
             Ok(None) => Flash::default(),
             Err(e) => {
                 tracing::error!(error = %e, "veer: failed to read flash from tower-sessions");
@@ -123,8 +95,7 @@ impl SessionStore for TowerSessionStore {
             missing_session_warning();
             return;
         };
-        let stored = StoredFlash::from(&flash);
-        if let Err(e) = session.insert(&self.key, stored).await {
+        if let Err(e) = session.insert(&self.key, flash).await {
             tracing::error!(error = %e, "veer: failed to write flash to tower-sessions");
         }
     }
@@ -153,7 +124,7 @@ mod tests {
         let store = TowerSessionStore::new();
 
         let mut flash = Flash::default();
-        flash.errors.insert("email".into(), "invalid".into());
+        flash.errors.insert("email".into(), vec!["invalid".into()]);
         flash.bags.insert("success".into(), serde_json::json!("ok"));
 
         let mut headers = HeaderMap::new();
@@ -165,8 +136,8 @@ mod tests {
         let parts = parts_with_session(session);
         let read = store.read_and_clear(&parts).await;
         assert_eq!(
-            read.errors.get("email").map(String::as_str),
-            Some("invalid")
+            read.errors.get("email").map(Vec::as_slice),
+            Some(&["invalid".to_string()][..])
         );
         assert_eq!(read.bags.get("success"), Some(&serde_json::json!("ok")));
 

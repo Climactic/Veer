@@ -1,6 +1,6 @@
 [package]
 name = "veer"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.88"
 license = "MIT OR Apache-2.0"
@@ -47,16 +47,16 @@ reqwest = { version = "0.13", default-features = false, features = ["json", "rus
 cookie = { version = "0.18", optional = true }
 hmac = { version = "0.13", optional = true }
 sha2 = { version = "0.11", optional = true }
-base64 = { version = "0.22", optional = true }
-getrandom = { version = "0.3", optional = true }
+base64 = { version = "0.23", optional = true }
+getrandom = { version = "0.4", optional = true }
 subtle = { version = "2", optional = true }
 
 tower-sessions = { version = "0.15", optional = true }
 
-validator = { version = "0.20", features = ["derive"], optional = true }
+validator = { version = "0.21", features = ["derive"], optional = true }
 garde = { version = "0.23", features = ["derive", "email"], optional = true }
 
-ts-rs = { version = "11", optional = true }
+ts-rs = { version = "12", optional = true }
 inventory = { version = "0.3", optional = true }
 
 [dev-dependencies]

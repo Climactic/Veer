@@ -17,6 +17,8 @@ pub(crate) struct PerRequest {
     /// `SessionStore::write` hook can recover session middleware handles
     /// (`tower-sessions::Session`, etc.) that live in request extensions.
     pub req_extensions: Arc<Extensions>,
+    /// Id of the DevTools entry of this request, when the recorder is on.
+    pub devtools_id: Option<String>,
 }
 
 impl<S> FromRequestParts<S> for Inertia

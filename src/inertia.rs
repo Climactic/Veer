@@ -66,7 +66,7 @@ impl Inertia {
     /// Typical usage: `inertia.with_errors(errors).redirect("/form")`.
     pub fn with_errors<E: crate::errors::IntoErrorBag>(&self, errors: E) -> InertiaResponse {
         let mut r = InertiaResponse::new(String::new(), serde_json::Value::Null);
-        r.pending_flash.errors.extend(errors.into_error_bag());
+        r.pending_flash.errors.extend(errors.into_all_errors());
         r
     }
 

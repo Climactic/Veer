@@ -9,30 +9,48 @@ export interface PageObject<P = Pages> {
   version: string;
   encryptHistory?: boolean;
   clearHistory?: boolean;
+  preserveFragment?: boolean;
+  preserveBigIntegers?: boolean;
+  sharedProps?: string[];
   mergeProps?: string[];
-  resetMergeProps?: string[];
+  prependProps?: string[];
+  deepMergeProps?: string[];
+  matchPropsOn?: string[];
   deferredProps?: Record<string, string[]>;
+  rescuedProps?: string[];
+  scrollProps?: Record<string, ScrollProp>;
+  onceProps?: Record<string, { prop: string; expiresAt: number | null }>;
+  flash?: Flash;
+}
+
+export interface ScrollProp {
+  pageName: string;
+  previousPage: number | string | null;
+  nextPage: number | string | null;
+  currentPage: number | string | null;
+  reset: boolean;
 }
 
 export type ErrorBag = Record<string, string>;
 
-export interface Flash {
-  errors: ErrorBag;
-  bags: Record<string, unknown>;
-}
+export type Flash = Record<string, unknown>;
 
-export type HomeProps = Record<string, never>;
+export type HomeProps = Record<symbol, never>;
+
+export type ShowcaseProps = Record<symbol, never>;
 
 export type Todo = { id: bigint, title: string, done: boolean, };
 
-export type TodosCreateProps = Record<string, never>;
+export type TodosCreateProps = Record<symbol, never>;
 
 export type TodosIndexProps = { todos: Array<Todo>, };
 
 export type Pages =
   | { component: "home"; props: HomeProps }
+  | { component: "showcase"; props: ShowcaseProps }
   | { component: "todos/create"; props: TodosCreateProps }
   | { component: "todos/index"; props: TodosIndexProps };
 
 export * as _root from "./actions/_root";
+export * as showcase from "./actions/showcase";
 export * as todos from "./actions/todos";

@@ -13,7 +13,7 @@ pub struct Todo {
 
 #[derive(Deserialize, Validate)]
 pub struct NewTodo {
-    #[validate(length(min = 1, message = "title is required"))]
+    #[validate(length(min = 3, message = "title must have at least 3 characters"))]
     pub title: String,
 }
 
@@ -53,6 +53,13 @@ impl TodoStore {
 #[ts(export)]
 pub struct HomeProps {}
 veer::register_page!(HomeProps, "home");
+
+/// The closure props of the showcase page (`plans`, `stats`, `broken`, `feed`)
+/// are attached in the handler, so they are not part of this type.
+#[derive(Serialize, TS)]
+#[ts(export)]
+pub struct ShowcaseProps {}
+veer::register_page!(ShowcaseProps, "showcase");
 
 #[derive(Serialize, TS)]
 #[ts(export)]

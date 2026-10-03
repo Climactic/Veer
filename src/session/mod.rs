@@ -8,22 +8,32 @@ pub mod tower;
 
 use async_trait::async_trait;
 use http::{request::Parts as RequestParts, Extensions, HeaderMap};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
 /// One-shot flash data carried between two requests via the session store.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(default)]
+#[non_exhaustive]
 pub struct Flash {
-    /// Validation errors keyed by field name.
-    pub errors: HashMap<String, String>,
-    /// Other named flash bags (`success`, `info`, etc.).
+    /// Validation error messages keyed by field name.
+    pub errors: HashMap<String, Vec<String>>,
+    /// Flash data (`success`, `info`, etc.), sent as the page object's `flash`.
     pub bags: HashMap<String, Value>,
+    /// The next page must set `clearHistory`.
+    pub clear_history: bool,
+    /// The next page must set `preserveFragment`.
+    pub preserve_fragment: bool,
 }
 
 impl Flash {
     /// `true` if there's nothing to write.
     pub fn is_empty(&self) -> bool {
-        self.errors.is_empty() && self.bags.is_empty()
+        self.errors.is_empty()
+            && self.bags.is_empty()
+            && !self.clear_history
+            && !self.preserve_fragment
     }
 }
 

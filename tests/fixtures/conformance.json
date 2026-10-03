@@ -52,7 +52,7 @@
       "request": {
         "method": "GET",
         "uri": "/oauth",
-        "headers": {}
+        "headers": { "x-inertia": "true", "x-inertia-version": "v1" }
       },
       "expect": {
         "status": 409,

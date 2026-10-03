@@ -1,12 +1,13 @@
 //! Prop wrappers and resolution machinery.
 
 pub mod always;
-pub mod closure;
 pub mod merge;
+pub mod prop;
 pub mod resolver;
 
 pub use always::Always;
 pub use merge::Merge;
+pub use prop::{Prop, ScrollMetadata};
 
 /// Sentinel object key that marks a value as wrapped in [`Always`].
 ///

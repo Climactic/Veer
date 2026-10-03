@@ -69,11 +69,7 @@ impl CookieSessionStore {
     }
 
     fn encode(&self, flash: &Flash) -> String {
-        let payload = serde_json::to_vec(&serde_json::json!({
-            "errors": flash.errors,
-            "bags": flash.bags,
-        }))
-        .unwrap();
+        let payload = serde_json::to_vec(flash).unwrap();
         let b64 = URL_SAFE_NO_PAD.encode(&payload);
         let sig = self.sign(b64.as_bytes());
         format!("{b64}.{sig}")
@@ -85,17 +81,7 @@ impl CookieSessionStore {
             return None;
         }
         let bytes = URL_SAFE_NO_PAD.decode(b64).ok()?;
-        let parsed: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
-        Some(Flash {
-            errors: parsed
-                .get("errors")
-                .and_then(|v| serde_json::from_value(v.clone()).ok())
-                .unwrap_or_default(),
-            bags: parsed
-                .get("bags")
-                .and_then(|v| serde_json::from_value(v.clone()).ok())
-                .unwrap_or_default(),
-        })
+        serde_json::from_slice(&bytes).ok()
     }
 
     fn clear_cookie(&self) -> Cookie<'static> {
@@ -164,7 +150,7 @@ mod tests {
     async fn roundtrip_encode_decode_via_cookie() {
         let store = CookieSessionStore::new(vec![0u8; 32]).secure(false);
         let mut flash = Flash::default();
-        flash.errors.insert("name".into(), "required".into());
+        flash.errors.insert("name".into(), vec!["required".into()]);
 
         let mut headers = HeaderMap::new();
         let exts = Extensions::new();
@@ -180,7 +166,7 @@ mod tests {
 
         let req = parts(Some(v));
         let read = store.read_and_clear(&req).await;
-        assert_eq!(read.errors.get("name").unwrap(), "required");
+        assert_eq!(read.errors["name"], ["required"]);
     }
 
     #[tokio::test]
