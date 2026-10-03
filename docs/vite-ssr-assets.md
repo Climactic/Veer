@@ -79,17 +79,19 @@ import createServer from "@inertiajs/react/server";
 import { createInertiaApp } from "@inertiajs/react";
 import ReactDOMServer from "react-dom/server";
 
+const pages = import.meta.glob("./pages/**/*.tsx", { eager: true });
+
 createServer((page) =>
   createInertiaApp({
     page,
     render: ReactDOMServer.renderToString,
-    resolve: (name) => import(`./pages/${name}.tsx`),
+    resolve: (name) => pages[`./pages/${name}.tsx`],
     setup: ({ App, props }) => <App {...props} />,
   }),
 );
 ```
 
-In production, build it with `vite build --ssr frontend/ssr.tsx` and run the bundle with `node` or `bun`.
+Build it with `vite build --ssr frontend/ssr.tsx` and run the bundle with `node` or `bun`. `import.meta.glob` is a Vite feature: if you run the source file directly with Bun in development, import the pages into a map by hand, as the [example app](../examples/axum-react-todo/frontend/ssr.tsx) does.
 
 ## Embedded assets
 
