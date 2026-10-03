@@ -10,6 +10,7 @@ documentation = "https://docs.rs/veer"
 readme = "README.md"
 keywords = ["inertia", "axum", "spa", "react", "vue"]
 categories = ["web-programming", "web-programming::http-server"]
+exclude = [".ai/", ".cargo/", ".github/", "examples/"]
 
 [features]
 default = ["axum"]
