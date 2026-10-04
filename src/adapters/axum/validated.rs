@@ -13,6 +13,8 @@ use serde::de::DeserializeOwned;
 ///
 /// A Precognition request gets its answer here. Invalid input goes back to
 /// the page that the user came from, with the errors.
+// `Response` is the rejection type of the extractors below, as is usual in axum.
+#[allow(clippy::result_large_err)]
 async fn extract<S, T, E>(
     req: Request<Body>,
     state: &S,
