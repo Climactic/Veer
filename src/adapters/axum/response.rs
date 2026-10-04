@@ -61,7 +61,7 @@ pub(crate) async fn finalize(
             "veer: the props of `{}` did not serialize: {error}",
             builder.component
         );
-        return finish_with_flash(server_error(&detail), pending, per).await;
+        return failed(server_error(&detail), per).await;
     }
 
     // Control responses carry no page. The flash data that this request read
@@ -169,7 +169,7 @@ pub(crate) async fn finalize(
             tracing::error!(%error, "veer: prop failed to resolve");
             let mut r = Response::new(Body::from("Internal Server Error"));
             *r.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-            return finish_with_flash(r, pending, per).await;
+            return failed(r, per).await;
         }
     };
 
@@ -249,7 +249,7 @@ pub(crate) async fn finalize(
                 Ok(p) => ssr_payload = Some(p),
                 Err(e) if cfg.ssr_required => {
                     let r = server_error(&format!("ssr failed: {e}"));
-                    return finish_with_flash(r, pending, per).await;
+                    return failed(r, per).await;
                 }
                 Err(e) => tracing::warn!(error = ?e, "SSR failed; falling back to client render"),
             }
@@ -265,7 +265,7 @@ pub(crate) async fn finalize(
             Ok(html) => html,
             Err(e) => {
                 let r = server_error(&format!("root view error: {e}"));
-                return finish_with_flash(r, pending, per).await;
+                return failed(r, per).await;
             }
         };
         // The extension sees the first page load through the DOM only.
@@ -351,6 +351,12 @@ pub(crate) async fn finish_with_flash(
         );
     }
     response
+}
+
+/// Finish a `500`. The page did not render, so the flash data that this
+/// request read goes on to the request that follows.
+async fn failed(response: Response<Body>, per: &PerRequest) -> Response<Body> {
+    finish_with_flash(response, (*per.flash).clone(), per).await
 }
 
 /// A `500` for a failure in the application's use of veer. The cause is

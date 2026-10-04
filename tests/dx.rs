@@ -20,6 +20,15 @@ async fn body_text(response: axum::response::Response) -> String {
     String::from_utf8(bytes.to_vec()).unwrap()
 }
 
+/// The cause is in a `500` body in a debug build only.
+fn detail(cause: &'static str) -> &'static str {
+    if cfg!(debug_assertions) {
+        cause
+    } else {
+        "Internal Server Error"
+    }
+}
+
 fn json_post(uri: &str, body: serde_json::Value) -> Request<Body> {
     Request::post(uri)
         .header("x-inertia", "true")
@@ -37,11 +46,12 @@ async fn missing_layer_names_the_cause() {
     );
     let response = app.oneshot(visit("GET", "/")).await.unwrap();
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
-    assert!(body_text(response).await.contains("InertiaLayer"));
+    assert!(body_text(response).await.contains(detail("InertiaLayer")));
 }
 
 #[tokio::test]
-async fn props_that_do_not_serialize_are_a_500() {
+async fn props_that_do_not_serialize_are_a_500_and_keep_the_flash_data() {
+    let session = MemorySession::default();
     let app = Router::new()
         .route(
             "/",
@@ -50,12 +60,21 @@ async fn props_that_do_not_serialize_are_a_500() {
                 i.render("Home", HashMap::from([((1, 2), 3)]))
             }),
         )
-        .layer(InertiaLayer::new(InertiaConfig::new()));
+        .route(
+            "/go",
+            post(|i: Inertia| async move { i.redirect("/").with_flash("success", "Saved") }),
+        )
+        .layer(InertiaLayer::new(
+            InertiaConfig::new().session(session.clone()),
+        ));
+    app.clone().oneshot(visit("POST", "/go")).await.unwrap();
+
     let response = app.oneshot(visit("GET", "/")).await.unwrap();
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
-    assert!(body_text(response)
-        .await
-        .contains("`Home` did not serialize"));
+    let body = body_text(response).await;
+    assert!(body.contains(detail("`Home` did not serialize")), "{body}");
+    // The failed page did not show the message; the next request gets it.
+    assert_eq!(session.flash().bags["success"], json!("Saved"));
 }
 
 #[tokio::test]

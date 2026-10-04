@@ -74,6 +74,9 @@ Developer-experience changes: clear failures, less code in handlers, less setup.
 
 ### Fixed
 
+- A `500` from a failed page render (props, a prop closure, SSR, the root
+  view) keeps the flash data of the request for the request that follows.
+  Before, the data was lost.
 - The `Router` documentation used the axum 0.7 path syntax (`/:id`).
 
 ## [0.2.0] - 2026-10-03
