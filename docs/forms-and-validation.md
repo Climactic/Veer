@@ -4,8 +4,10 @@ Inertia handles a form submit like a classic server-rendered app: the handler va
 
 ## A form handler
 
+With the `validator` feature, `Validated<T>` decodes the body and validates it before your handler runs:
+
 ```rust,ignore
-use veer::{Inertia, InertiaForm};
+use veer::{Inertia, Validated};
 use validator::Validate;
 
 #[derive(serde::Deserialize, Validate)]
@@ -16,6 +18,21 @@ struct NewUser {
     email: String,
 }
 
+async fn users_store(inertia: Inertia, Validated(body): Validated<NewUser>) -> impl IntoResponse {
+    create_user(body).await;
+    inertia.redirect("/users").with_flash("success", "User created")
+}
+```
+
+The handler runs only for valid input. For invalid input, `Validated` redirects back to the page that the user came from ([`back`](redirects-and-history.md)), with the errors. `back` needs the `Referer` header, which browsers send by default. If your site sets `Referrer-Policy: no-referrer`, turn on `InertiaConfig::store_previous_url(true)`, or validate by hand. It also answers [Precognition](#precognition-live-validation) requests. With the `garde` feature, use `GardeValidated<T>` in the same way.
+
+`Validated<T>` reads the body as `InertiaForm<T>` does: `application/json`, `application/x-www-form-urlencoded`, and, with the `multipart` feature, `multipart/form-data`. One handler works for all three.
+
+### Validation by hand
+
+Use `InertiaForm<T>` when you want control of the steps, for example to redirect to a different page or to add an error from a database check:
+
+```rust,ignore
 async fn users_store(
     inertia: Inertia,
     InertiaForm(body): InertiaForm<NewUser>,
@@ -24,11 +41,9 @@ async fn users_store(
         return inertia.with_errors(errors).redirect("/users/new");
     }
     create_user(body).await;
-    inertia.redirect("/users").with_flash("success", json!("User created"))
+    inertia.redirect("/users").with_flash("success", "User created")
 }
 ```
-
-`InertiaForm<T>` reads `application/json`, `application/x-www-form-urlencoded`, and, with the `multipart` feature, `multipart/form-data`. One handler works for all three.
 
 ## Validation errors
 
@@ -47,16 +62,18 @@ On the next page, the errors are in `props.errors`, which is always present (`{}
 ## Flash data
 
 ```rust,ignore
-inertia.redirect("/users").with_flash("success", json!("User created"))
+inertia.redirect("/users").with_flash("success", "User created")
 ```
 
 Flash data is one-shot. It is the top-level `flash` field of the page object (`usePage().flash` on the frontend), and the client does not keep it in the browser history. It survives a chain of redirects, and responses that are not pages do not use it up.
 
-`with_flash` on a render puts the data on that page.
+The value is anything that converts to JSON: a string, a number, or `json!({ … })`. `with_flash` on a render puts the data on that page.
 
 ## Precognition (live validation)
 
-[Precognition](https://inertiajs.com/docs/v3/the-basics/forms#precognition) validates a field while the user fills in the form, with the validation rules of the server. The client sends the normal request with a `Precognition: true` header. Answer it before the action runs:
+[Precognition](https://inertiajs.com/docs/v3/the-basics/forms#precognition) validates a field while the user fills in the form, with the validation rules of the server. The client sends the normal request with a `Precognition: true` header.
+
+`Validated<T>` and `GardeValidated<T>` answer these requests; your handler does not run. With `InertiaForm<T>`, answer the request before the action runs:
 
 ```rust,ignore
 async fn users_store(
@@ -113,7 +130,7 @@ async fn upload_avatar(
     InertiaForm(form): InertiaForm<CreateAvatar>,
 ) -> impl IntoResponse {
     save_avatar(&form.user_id, &form.avatar.bytes, form.avatar.filename.as_deref()).await;
-    inertia.redirect("/profile").with_flash("success", json!("Avatar updated"))
+    inertia.redirect("/profile").with_flash("success", "Avatar updated")
 }
 ```
 

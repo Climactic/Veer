@@ -138,9 +138,10 @@ where
                 .map(|c| cfg.tokens.is_valid(c))
                 .unwrap_or(false);
 
-            let is_mutating = matches!(
+            // Each method that is not safe is checked, also an unknown one.
+            let is_mutating = !matches!(
                 *req.method(),
-                Method::POST | Method::PUT | Method::PATCH | Method::DELETE
+                Method::GET | Method::HEAD | Method::OPTIONS | Method::TRACE
             );
             let excluded = path_excluded(req.uri().path(), &cfg.excludes);
 

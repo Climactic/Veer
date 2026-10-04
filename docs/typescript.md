@@ -25,6 +25,14 @@ veer::register_page!(UsersIndexProps, "Users/Index");
 
 `ts-rs` follows `#[serde(rename_all)]`, so the type and the wire format agree.
 
+A registered struct knows its component, so a handler renders it with `inertia.page(props)` and the name is written one time:
+
+```rust,ignore
+async fn users_index(inertia: Inertia) -> impl IntoResponse {
+    inertia.page(UsersIndexProps { users: load_users().await })
+}
+```
+
 ### Closure props
 
 Props that a handler attaches as closures (`once`, `deferred`, `lazy`, `Prop::scroll`, …) are not fields of the props struct. Describe them in a second struct and pass it as the third argument:
@@ -45,7 +53,7 @@ The props type of the page is then `UsersIndexProps & UsersIndexClosureProps`. T
 
 ```rust,ignore
 inertia
-    .render("Users/Index", UsersIndexProps { users })
+    .page(UsersIndexProps { users })
     .once("plans", || async { load_plans().await })                 // Vec<Plan>
     .deferred("stats", "default", || async { load_stats().await })  // Stats
 ```
@@ -149,7 +157,16 @@ veer::bindings::Split::new("./frontend/gen")
 
 **Wrappers.** `Always<T>` and `Merge<T>` become `T`.
 
-**Keep the output current.** With [lefthook](https://github.com/evilmartians/lefthook):
+**Keep the output current.** The simplest way is to generate when the server starts in a debug build. A file is written only when its content changes, so Vite reloads only when a type or a route changed:
+
+```rust,ignore
+let app = router().build();
+if cfg!(debug_assertions) {
+    veer::bindings::generate_split("./frontend/gen")?;
+}
+```
+
+Or generate before each commit, with [lefthook](https://github.com/evilmartians/lefthook):
 
 ```yaml
 pre-commit:
@@ -162,4 +179,4 @@ pre-commit:
 
 In CI, run `cargo run --bin gen-bindings && git diff --exit-code`.
 
-Files of a controller that you removed are not deleted; delete the output folder before you generate if that is important.
+When you remove a controller, the generator deletes its file from the actions subdirectory. It deletes only files that have the veer header and the prefix and suffix of your configuration. With `actions_dir("")` it deletes nothing.

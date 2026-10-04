@@ -77,7 +77,7 @@ Or with `cargo add`:
 cargo add veer
 ```
 
-The default feature set includes the axum adapter. See [Feature flags](#️-feature-flags) for everything else. Coming from 0.1? Read the [upgrade guide](docs/upgrading.md).
+The default feature set includes the axum adapter. See [Feature flags](#️-feature-flags) for everything else. Coming from an older version? Read the [upgrade guide](docs/upgrading.md).
 
 ## 🚀 Quick Start
 
@@ -88,7 +88,6 @@ use veer::{Inertia, InertiaConfig, InertiaLayer, MinimalRootView};
 #[tokio::main]
 async fn main() {
     let cfg = InertiaConfig::new()
-        .version(|| "1".into())
         .root_view(
             MinimalRootView::new()
                 .title("Acme")
@@ -124,21 +123,20 @@ inertia
 **Handle a form like a classic server app.** Validate, redirect, and the errors and the flash message show on the next page. → [Forms and validation](docs/forms-and-validation.md)
 
 ```rust,ignore
-async fn users_store(inertia: Inertia, InertiaForm(body): InertiaForm<NewUser>) -> impl IntoResponse {
-    if let Err(errors) = body.validate() {
-        return inertia.with_errors(errors).redirect("/users/new");
-    }
+async fn users_store(inertia: Inertia, Validated(body): Validated<NewUser>) -> impl IntoResponse {
+    // Invalid input went back to the form with its errors already.
     create_user(body).await;
-    inertia.redirect("/users").with_flash("success", json!("User created"))
+    inertia.redirect("/users").with_flash("success", "User created")
 }
 ```
 
 **Share data with every page.** → [Shared props](docs/props.md#shared-props)
 
 ```rust,ignore
-let cfg = InertiaConfig::new().shared(shared_props_fn(|_req| async move {
-    json!({ "auth": { "user": current_user().await } })
-}));
+let cfg = InertiaConfig::new().share(|req| {
+    let user = req.extension::<CurrentUser>().cloned(); // set by your auth middleware
+    async move { json!({ "auth": { "user": user } }) }
+});
 ```
 
 **Get TypeScript types from your Rust structs.** → [TypeScript bindings](docs/typescript.md)
@@ -148,6 +146,9 @@ let cfg = InertiaConfig::new().shared(shared_props_fn(|_req| async move {
 #[ts(export)]
 pub struct UsersIndexProps { pub users: Vec<User> }
 veer::register_page!(UsersIndexProps, "Users/Index");
+
+// The component name comes from the registration.
+inertia.page(UsersIndexProps { users })
 ```
 
 ```tsx
@@ -162,15 +163,17 @@ import { users, type UsersIndexProps } from "./gen";
 |---|---|
 | [Getting started](docs/getting-started.md) | Install, first page, how a request flows, the frontend entry point |
 | [Props](docs/props.md) | Partial reloads, lazy / deferred / once props, merging, infinite scroll, shared props, big integers |
-| [Forms and validation](docs/forms-and-validation.md) | `InertiaForm`, validation errors, error bags, flash data, Precognition, file uploads |
+| [Forms and validation](docs/forms-and-validation.md) | `Validated`, `InertiaForm`, validation errors, error bags, flash data, Precognition, file uploads |
 | [Redirects and history](docs/redirects-and-history.md) | `redirect`, `back`, external redirects, URL fragments, history encryption |
 | [Sessions](docs/sessions.md) | The cookie store, `tower-sessions`, writing your own store |
+| [Error pages](docs/error-pages.md) | `404` and application errors as Inertia pages |
+| [Testing](docs/testing.md) | `veer::testing`: page assertions for your handlers |
 | [Vite, SSR and assets](docs/vite-ssr-assets.md) | `ViteRootView`, server-side rendering, embedded assets, `<head>` elements |
 | [TypeScript bindings](docs/typescript.md) | Typed page props and route helpers generated from Rust |
 | [CSRF protection](docs/csrf.md) | `CsrfLayer` and the `XSRF-TOKEN` convention |
 | [DevTools](docs/devtools.md) | The recorder for the Inertia DevTools browser extension |
 | [Architecture](docs/architecture.md) | Crate layout, protocol coverage, extension points |
-| [Upgrading from 0.1](docs/upgrading.md) | Every breaking change in 0.2 and what to do |
+| [Upgrading](docs/upgrading.md) | Every breaking change of each version and what to do |
 
 API reference: [docs.rs/veer](https://docs.rs/veer). For the client side, use the [Inertia documentation](https://inertiajs.com/docs/v3).
 
@@ -183,12 +186,13 @@ API reference: [docs.rs/veer](https://docs.rs/veer). For the client side, use th
 | `ssr` | off | HTTP SSR client (`reqwest`) |
 | `cookie-session` | off | Signed-cookie session store |
 | `tower-sessions` | off | Session store backed by [`tower-sessions`](https://crates.io/crates/tower-sessions) |
-| `validator` | off | `IntoErrorBag` impl for `validator::ValidationErrors` |
-| `garde` | off | `IntoErrorBag` impl for `garde::Report` |
+| `validator` | off | `Validated<T>` extractor + `IntoErrorBag` impl for `validator::ValidationErrors` |
+| `garde` | off | `GardeValidated<T>` extractor + `IntoErrorBag` impl for `garde::Report` |
 | `csrf` | off | CSRF protection (`CsrfLayer`) |
 | `embed` | off | Embedded-asset serving for single-binary deploys (`EmbeddedAssets`) |
 | `devtools` | off | Recorder + read API for the Inertia DevTools browser extension |
 | `ts` | off | End-to-end TypeScript bindings codegen (`ts-rs` + `inventory`) |
+| `testing` | off | Test helpers (`veer::testing`) |
 
 Disabling a feature drops its transitive deps entirely.
 

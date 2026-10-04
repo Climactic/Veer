@@ -6,7 +6,7 @@ pub mod vite;
 
 pub use closure::ClosureRootView;
 pub use minimal::MinimalRootView;
-pub use vite::{ViteManifest, ViteRootView};
+pub use vite::{ViteManifest, ViteManifestError, ViteRootView};
 
 use crate::ssr::SsrPayload;
 
@@ -32,4 +32,11 @@ pub struct RootViewContext<'a> {
 pub trait RootView: Send + Sync {
     /// Produce the HTML body for the response.
     fn render(&self, ctx: RootViewContext<'_>) -> Result<String, String>;
+
+    /// The asset version that this view knows, if any. It is the default of
+    /// [`crate::InertiaConfig::version`]. [`ViteRootView`] in production mode
+    /// returns the hash of its manifest.
+    fn version(&self) -> Option<String> {
+        None
+    }
 }

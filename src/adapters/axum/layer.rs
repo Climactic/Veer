@@ -106,11 +106,7 @@ where
             };
             // Capture data we'll need to rebuild RequestInfo for finalize.
             let method_for_post = parts.method.clone();
-            let url_for_finalize = parts
-                .uri
-                .path_and_query()
-                .map(|p| p.as_str().to_string())
-                .unwrap_or_else(|| parts.uri.path().to_string());
+            let url_for_finalize = RequestInfo::url_of(&parts.uri);
             let headers_clone = parts.headers.clone();
             // Snapshot extensions so session stores that piggyback on
             // middleware-installed handles (e.g. tower-sessions::Session) can
@@ -138,7 +134,8 @@ where
             let mut resp = inner.call(request).await?;
 
             let req_info =
-                RequestInfo::from_parts(method_for_post.clone(), url_for_finalize, &headers_clone);
+                RequestInfo::from_parts(method_for_post.clone(), url_for_finalize, &headers_clone)
+                    .with_extensions(extensions_snapshot.clone());
 
             // If handler returned an Inertia marker, finalize.
             if let Some(marker) = resp.extensions_mut().remove::<InertiaResponseMarker>() {
@@ -243,7 +240,7 @@ async fn plain_response(
     per: &PerRequest,
     req: &RequestInfo,
 ) -> Response<Body> {
-    let version = (per.config.version)();
+    let version = per.config.current_version();
     let is_redirect = resp.status().is_redirection();
     let fragment_target = resp
         .headers()

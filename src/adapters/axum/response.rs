@@ -45,7 +45,7 @@ pub(crate) async fn finalize(
 ) -> Response<Body> {
     let cfg = &per.config;
     let incoming = &*per.flash;
-    let version = (cfg.version)().into_owned();
+    let version = cfg.current_version().into_owned();
 
     let decision = decide(DecisionInputs {
         req: req_info,
@@ -55,6 +55,14 @@ pub(crate) async fn finalize(
     });
 
     let mut pending = std::mem::take(&mut builder.pending_flash);
+
+    if let Some(error) = builder.props_error.take() {
+        let detail = format!(
+            "veer: the props of `{}` did not serialize: {error}",
+            builder.component
+        );
+        return finish_with_flash(server_error(&detail), pending, per).await;
+    }
 
     // Control responses carry no page. The flash data that this request read
     // goes on to the request that follows.
@@ -156,6 +164,8 @@ pub(crate) async fn finalize(
     let resolved = match resolved {
         Ok(resolved) => resolved,
         Err(error) => {
+            // The error comes from application code at run time (a database
+            // error, for example), so it does not go in the body.
             tracing::error!(%error, "veer: prop failed to resolve");
             let mut r = Response::new(Body::from("Internal Server Error"));
             *r.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
@@ -238,23 +248,26 @@ pub(crate) async fn finalize(
             match client.render(&page_value).await {
                 Ok(p) => ssr_payload = Some(p),
                 Err(e) if cfg.ssr_required => {
-                    let mut r = Response::new(Body::from(format!("ssr failed: {e}")));
-                    *r.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                    let r = server_error(&format!("ssr failed: {e}"));
                     return finish_with_flash(r, pending, per).await;
                 }
                 Err(e) => tracing::warn!(error = ?e, "SSR failed; falling back to client render"),
             }
         }
 
-        let mut html = cfg
-            .root_view
-            .render(RootViewContext {
-                page_json: &escaped,
-                page_json_script: &script_escaped,
-                asset_version: &version,
-                ssr: ssr_payload.as_ref(),
-            })
-            .unwrap_or_else(|e| format!("root view error: {e}"));
+        let rendered = cfg.root_view.render(RootViewContext {
+            page_json: &escaped,
+            page_json_script: &script_escaped,
+            asset_version: &version,
+            ssr: ssr_payload.as_ref(),
+        });
+        let mut html = match rendered {
+            Ok(html) => html,
+            Err(e) => {
+                let r = server_error(&format!("root view error: {e}"));
+                return finish_with_flash(r, pending, per).await;
+            }
+        };
         // The extension sees the first page load through the DOM only.
         if let Some((id, at)) = per
             .devtools_id
@@ -275,6 +288,9 @@ pub(crate) async fn finalize(
         r
     };
 
+    if let Some(status) = builder.status {
+        *response.status_mut() = status;
+    }
     if let Some(recorded) = recorded {
         response.extensions_mut().insert(recorded);
     }
@@ -328,8 +344,33 @@ pub(crate) async fn finish_with_flash(
         session
             .write(response.headers_mut(), &per.req_extensions, pending)
             .await;
+    } else if !pending.is_empty() {
+        tracing::warn!(
+            "veer: flash data or validation errors were set, but there is no session store, \
+             so they are lost. Set one with `InertiaConfig::session`."
+        );
     }
     response
+}
+
+/// A `500` for a failure in the application's use of veer. The cause is
+/// logged; a debug build also puts it in the body.
+pub(crate) fn server_error(detail: &str) -> Response<Body> {
+    tracing::error!("{detail}");
+    let body = if cfg!(debug_assertions) {
+        detail
+    } else {
+        "Internal Server Error"
+    };
+    let mut r = Response::new(Body::from(body.to_owned()));
+    *r.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+    // Plain text: the Inertia client shows a non-Inertia response in a modal,
+    // and the detail must not be read as HTML.
+    r.headers_mut().insert(
+        http::header::CONTENT_TYPE,
+        HeaderValue::from_static("text/plain; charset=utf-8"),
+    );
+    r
 }
 
 fn html_attr_escape(s: &str) -> String {

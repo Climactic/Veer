@@ -19,6 +19,9 @@ pub struct InertiaResponse {
     pub(crate) skip_ssr: bool,
     pub(crate) redirect: Option<crate::protocol::Redirect>,
     pub(crate) pending_flash: crate::session::Flash,
+    pub(crate) status: Option<http::StatusCode>,
+    /// The props did not serialize; the response is a 500.
+    pub(crate) props_error: Option<String>,
     /// Where `Inertia::render` was called (for DevTools).
     #[cfg_attr(not(feature = "devtools"), allow(dead_code))]
     pub(crate) render_source: Option<&'static std::panic::Location<'static>>,
@@ -38,8 +41,32 @@ impl InertiaResponse {
             skip_ssr: false,
             redirect: None,
             pending_flash: Default::default(),
+            status: None,
+            props_error: None,
             render_source: None,
         }
+    }
+
+    /// Render a component with props. The same as [`crate::Inertia::render`],
+    /// for code that has no `Inertia` handle, such as the `IntoResponse` impl
+    /// of an application error type.
+    #[track_caller]
+    pub fn render<P: serde::Serialize>(component: impl Into<String>, props: P) -> Self {
+        let (value, error) = match serde_json::to_value(&props) {
+            Ok(v) => (v, None),
+            Err(e) => (Value::Null, Some(e.to_string())),
+        };
+        let mut response = Self::new(component, value);
+        response.props_error = error;
+        response.render_source = Some(std::panic::Location::caller());
+        response
+    }
+
+    /// Set the HTTP status of a page response (for example `404` for an error
+    /// page). The default is `200`.
+    pub fn status(mut self, status: http::StatusCode) -> Self {
+        self.status = Some(status);
+        self
     }
 
     /// Attach a closure-resolved [`Prop`] under a key. A dot path (`auth.perms`)

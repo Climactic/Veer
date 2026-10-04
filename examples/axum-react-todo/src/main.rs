@@ -26,7 +26,7 @@ async fn main() {
     //   `ViteManifest::load`).
     let ssr_mode = std::env::var("SSR").is_ok();
 
-    let mut cfg = InertiaConfig::new().version(|| "dev".into()).session(
+    let mut cfg = InertiaConfig::new().version_str("dev").session(
         CookieSessionStore::new(b"01234567890123456789012345678901".to_vec()).secure(false),
     );
     // Record requests for the Inertia DevTools browser extension (`devtools`
@@ -55,8 +55,14 @@ async fn main() {
     // CSRF protection (demo secret — load from config/env in production).
     // Stacked outside InertiaLayer so it verifies before the handler runs and
     // issues the XSRF-TOKEN cookie the Inertia/axios client echoes back.
-    let app = router()
-        .build()
+    let app = router().build();
+    // Keep the TypeScript bindings current while you develop. Files are
+    // written only when their content changes.
+    if cfg!(debug_assertions) {
+        let out = concat!(env!("CARGO_MANIFEST_DIR"), "/frontend/gen");
+        veer::bindings::generate_split(out).expect("generate bindings");
+    }
+    let app = app
         .with_state(store)
         .layer(InertiaLayer::new(cfg))
         .layer(CsrfLayer::new(b"01234567890123456789012345678901".to_vec()).secure(false));

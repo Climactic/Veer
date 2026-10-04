@@ -128,18 +128,29 @@ A dot path as key puts the prop inside a nested object: `.prop("auth.permissions
 Shared props are sent with every page: the signed-in user, the app name, feature flags.
 
 ```rust,ignore
-use veer::shared::shared_props_fn;
-
-let cfg = InertiaConfig::new()
-    .shared(shared_props_fn(|_req| async move {
+let cfg = InertiaConfig::new().share(|req| {
+    // Put in the request extensions by your auth middleware.
+    let user = req.extension::<CurrentUser>().cloned();
+    async move {
         serde_json::json!({
-            "auth": { "user": current_user().await },
+            "auth": { "user": user },
             "app": { "name": "Acme" },
         })
-    }));
+    }
+});
 ```
 
-A page prop with the same key wins. The page object lists the shared keys in `sharedProps`, which the client uses for instant visits. For request-specific data, implement the `SharedProps` trait; its method gets the `RequestInfo`.
+The closure returns any `Serialize` value that serializes to an object, so a struct works too. It gets the `RequestInfo`: the URL, the method, the Inertia headers, and the request extensions (`req.extension::<T>()`).
+
+The extensions are those that the request had when it reached `InertiaLayer`. A middleware that sets one must thus be outside it, which in axum means that its layer comes later:
+
+```rust,ignore
+let app = router()
+    .layer(InertiaLayer::new(cfg))
+    .layer(auth_layer);   // runs first; sets `CurrentUser`
+```
+
+A page prop with the same key wins. The page object lists the shared keys in `sharedProps`, which the client uses for instant visits. For a type of your own, implement the `SharedProps` trait and use `InertiaConfig::shared`.
 
 ## `Always` and `Merge` wrappers
 

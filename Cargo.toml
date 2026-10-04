@@ -25,6 +25,11 @@ csrf = ["axum", "dep:cookie", "dep:hmac", "dep:sha2", "dep:base64", "dep:getrand
 embed = ["axum"]
 devtools = ["axum"]
 ts = ["dep:ts-rs", "dep:inventory"]
+testing = ["axum"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }

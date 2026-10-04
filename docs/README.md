@@ -7,16 +7,18 @@ Veer is the server side of the [Inertia.js v3 protocol](https://inertiajs.com/do
 | Guide | What it covers |
 |---|---|
 | [Getting started](getting-started.md) | Install, first page, how a request flows, the frontend entry point |
-| [Upgrading from 0.1](upgrading.md) | Every breaking change in 0.2 and what to do |
+| [Upgrading](upgrading.md) | Every breaking change of each version and what to do |
 
 ## Building pages
 
 | Guide | What it covers |
 |---|---|
 | [Props](props.md) | Partial reloads, lazy / deferred / once props, merging, infinite scroll, shared props, big integers |
-| [Forms and validation](forms-and-validation.md) | `InertiaForm`, validation errors, error bags, flash data, Precognition, file uploads |
+| [Forms and validation](forms-and-validation.md) | `Validated`, `InertiaForm`, validation errors, error bags, flash data, Precognition, file uploads |
 | [Redirects and history](redirects-and-history.md) | `redirect`, `back`, external redirects, URL fragments, history encryption |
 | [Sessions](sessions.md) | The cookie store, `tower-sessions`, writing your own store |
+| [Error pages](error-pages.md) | `404` and application errors as Inertia pages |
+| [Testing](testing.md) | `veer::testing`: page assertions for your handlers |
 
 ## Frontend integration
 

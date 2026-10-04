@@ -1,6 +1,6 @@
 # Sessions
 
-Veer uses a session store for data that must reach the next request: validation errors, flash data, and the previous URL. Without a store, `with_errors` and `with_flash` on a redirect have no effect.
+Veer uses a session store for data that must reach the next request: validation errors, flash data, and the previous URL. Without a store, `with_errors` and `with_flash` on a redirect have no effect, and veer logs a warning.
 
 ## Cookie store
 

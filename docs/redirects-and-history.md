@@ -14,7 +14,7 @@ inertia.location("https://…")       // leave the app
 
 `inertia.back()` redirects to, in this order:
 
-1. the `Referer` header of the request;
+1. the path and query of the `Referer` header. The scheme and the host are dropped, so `back()` cannot redirect off your site;
 2. the previous URL from the session, if `InertiaConfig::store_previous_url(true)` is set;
 3. `/`.
 
