@@ -43,7 +43,7 @@ The protocol core has no I/O and no framework types. `protocol::decide` is a pur
 | `RootView` | The HTML shell of the first page load | `MinimalRootView`, `ViteRootView`, `ClosureRootView` |
 | `SessionStore` | Errors and flash data between requests | `CookieSessionStore`, `TowerSessionStore` |
 | `SsrClient` | Server-side rendering | `HttpSsrClient` |
-| `SharedProps` | Props for every page | `shared_props_fn` |
+| `SharedProps` | Props for every page | `InertiaConfig::share` (closure) |
 | `IntoErrorBag` | Validation errors from any library | `validator`, `garde`, maps and pairs |
 
 ## Feature flags
@@ -55,12 +55,13 @@ The protocol core has no I/O and no framework types. `protocol::decide` is a pur
 | `ssr` | off | HTTP SSR client (`reqwest`) |
 | `cookie-session` | off | Signed-cookie session store |
 | `tower-sessions` | off | Session store on [`tower-sessions`](https://crates.io/crates/tower-sessions) |
-| `validator` | off | `IntoErrorBag` for `validator::ValidationErrors` |
-| `garde` | off | `IntoErrorBag` for `garde::Report` |
+| `validator` | off | `Validated<T>`; `IntoErrorBag` for `validator::ValidationErrors` |
+| `garde` | off | `GardeValidated<T>`; `IntoErrorBag` for `garde::Report` |
 | `csrf` | off | `CsrfLayer` and `CsrfTokens` |
 | `embed` | off | `EmbeddedAssets` for a single-binary deploy |
 | `devtools` | off | Recorder for the Inertia DevTools extension |
-| `ts` | off | TypeScript bindings (`ts-rs`, `inventory`) |
+| `ts` | off | TypeScript bindings (`ts-rs`, `inventory`), `Inertia::page` |
+| `testing` | off | `veer::testing`: helpers for tests of your handlers |
 
 A feature that is off brings in none of its dependencies.
 

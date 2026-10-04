@@ -5,6 +5,80 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Developer-experience changes: clear failures, less code in handlers, less setup.
+
+### Added
+
+- `Validated<T>` (`validator` feature) and `GardeValidated<T>` (`garde`
+  feature): body extractors that validate, answer Precognition requests, and
+  redirect back with the errors.
+- `InertiaConfig::share`: shared props from a closure that returns any
+  `Serialize` value.
+- `RequestInfo::extension` / `extensions`: shared props can read data that a
+  middleware put in the request extensions (the signed-in user).
+- `Inertia::page(props)` (`ts` feature): the component name comes from
+  `register_page!`.
+- `InertiaResponse::render`: a page without the `Inertia` extractor, for the
+  `IntoResponse` impl of an error type. `InertiaResponse::status` sets the
+  HTTP status of a page.
+- `ViteRootView::auto`: dev mode in a debug build, production mode in a
+  release build.
+- `RootView::version`: a production `ViteRootView` gives the manifest hash as
+  the default asset version. `InertiaConfig::version_str` for a constant.
+- `veer::testing` (`testing` feature): `visit`, `TestPage`, `MemorySession`.
+- A warning when errors or flash data are set and there is no session store.
+- docs.rs shows all features, with a label on each feature-gated item.
+- Guides: error pages, testing.
+
+### Changed
+
+- **Breaking:** page props that do not serialize give a `500` (the cause is in the
+  body in a debug build). Before, the page rendered with `null` props.
+- **Breaking:** the rejection of the `Inertia` extractor is
+  `MissingInertiaLayer`, not `StatusCode`. Its body names the cause in a debug
+  build.
+- **Breaking:** `ViteManifest::load` and `ViteManifest::from_str` return
+  `ViteManifestError`, not `String`.
+- **Breaking:** `InertiaConfig::version` has no `"1"` default when the root
+  view has a version (see `RootView::version`).
+- The mode-specific setters of `ViteRootView` (`dev_server`, `react_refresh`,
+  `manifest`, `asset_base`) do nothing in the other mode. Before, they
+  panicked.
+- The bindings generator writes a file only when its content changes, and
+  `Split` deletes the generated files of removed controllers from its actions
+  subdirectory.
+
+### Security
+
+- `Inertia::back` and the empty-response redirect use only the path and query
+  of the `Referer`. Before, a `Referer` of another site made an open redirect.
+  **Breaking:** `RequestInfo::referer` is now that path, or `None`.
+- A request URL that starts with `//` is read as a path of this site
+  (`/evil.test/x`), so that the page URL and `X-Inertia-Location` cannot point
+  at another site.
+- `CsrfLayer` checks each method except `GET`, `HEAD`, `OPTIONS` and `TRACE`.
+  Before, a method other than `POST`, `PUT`, `PATCH` and `DELETE` was not
+  checked.
+- An SSR failure with `ssr_required`, and a root view failure, give a `500`
+  with a generic body in a release build. Before, the error text went to the
+  client, and the root view error had status `200`.
+- `EmbeddedAssets` answers `404` for a path with `..`, `\`, or `%`, and does
+  not call the resolver. It sets `X-Content-Type-Options: nosniff`.
+- `CookieSessionStore` signs the cookie name with the value, so that the value
+  of one cookie is not valid as another cookie. Cookies from an older version
+  are ignored one time.
+- `ViteRootView` and `MinimalRootView` escape URLs in the tags that they emit.
+- The `500` bodies that veer makes are `text/plain`.
+
+### Fixed
+
+- A `500` from a failed page render (props, a prop closure, SSR, the root
+  view) keeps the flash data of the request for the request that follows.
+  Before, the data was lost.
+- The `Router` documentation used the axum 0.7 path syntax (`/:id`).
+
 ## [0.2.0] - 2026-10-03
 
 Brings the protocol surface up to Inertia client 3.8.0 / `inertia-laravel` 3.5.1.

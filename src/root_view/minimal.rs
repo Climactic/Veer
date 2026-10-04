@@ -42,7 +42,12 @@ impl RootView for MinimalRootView {
         let vite = self
             .vite_entry
             .as_deref()
-            .map(|p| format!(r#"<script type="module" src="{p}"></script>"#))
+            .map(|p| {
+                format!(
+                    r#"<script type="module" src="{}"></script>"#,
+                    html_escape(p)
+                )
+            })
             .unwrap_or_default();
         // SSR sidecars (`@inertiajs/<framework>/server`) return a body that
         // already contains the `<script data-page="app">` page payload and a

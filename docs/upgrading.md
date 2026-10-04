@@ -1,4 +1,45 @@
-# Upgrading from 0.1 to 0.2
+# Upgrading
+
+## From 0.2 to the next version
+
+The next version makes failures visible and removes repeated code. Most apps compile without a change. The full list is in the [changelog](../CHANGELOG.md).
+
+**Changes that can need an edit**
+
+- **`ViteManifest::load` and `.parse()` return `ViteManifestError`**, not `String`. It implements `std::error::Error`, so `?` works with `anyhow` and `Box<dyn Error>`. Remove a `.map_err` that you added for the `String`.
+- **The rejection of the `Inertia` extractor is `MissingInertiaLayer`**, not `StatusCode`. This is important only if you name the rejection type.
+- **Props that do not serialize give a `500`.** Before, the page rendered with `null` props.
+- **The asset version of a production `ViteRootView` is the manifest hash** when you set no version. If you have `.version(move || hash.clone().into())`, you can remove it.
+
+- **`RequestInfo::referer` is the path and query of the `Referer`, or `None`.** The scheme and the host are dropped, so `back()` always stays on your site.
+- **`CsrfLayer` checks each method except `GET`, `HEAD`, `OPTIONS` and `TRACE`.**
+- **Flash cookies from 0.2 are ignored** after the upgrade (they live 60 seconds).
+
+**Recommended**
+
+```diff
+- async fn users_store(inertia: Inertia, InertiaForm(body): InertiaForm<NewUser>) -> Response {
+-     if let Some(precognition) = inertia.precognition() {
+-         return precognition.respond(body.validate());
+-     }
+-     if let Err(errors) = body.validate() {
+-         return inertia.with_errors(errors).redirect("/users/new").into_response();
+-     }
++ async fn users_store(inertia: Inertia, Validated(body): Validated<NewUser>) -> impl IntoResponse {
+      create_user(body).await;
+-     inertia.redirect("/users").with_flash("success", json!("User created")).into_response()
++     inertia.redirect("/users").with_flash("success", "User created")
+  }
+```
+
+- `InertiaConfig::share(|req| async { … })` replaces `.shared(shared_props_fn(…))`. The closure can read request extensions: `req.extension::<CurrentUser>()`.
+- `inertia.page(props)` replaces `inertia.render("Name", props)` for a struct with `register_page!`.
+- `ViteRootView::auto(manifest_path)` replaces a hand-written switch between `dev()` and `production()`.
+- `InertiaConfig::version_str("v1")` replaces `.version(|| "v1".into())`.
+- Call `veer::bindings::generate_split` at startup in a debug build; see [TypeScript bindings](typescript.md#options).
+- Use [`veer::testing`](testing.md) in your tests.
+
+## From 0.1 to 0.2
 
 Version 0.2 brings veer to the current Inertia v3 protocol (client 3.8). Most apps need the first two changes; the others apply only if you use the feature. The full list of additions is in the [changelog](../CHANGELOG.md).
 

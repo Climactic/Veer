@@ -12,43 +12,48 @@ The **root view** is the HTML shell of the first page load. Veer has three:
 
 `ViteRootView` does what Laravel's `@vite` and `@viteReactRefresh` directives do.
 
-**Development.** Script tags point at the Vite dev server:
+**One setup for both modes.** `ViteRootView::auto` gives dev mode in a debug build and production mode in a release build:
 
 ```rust,ignore
 use veer::ViteRootView;
 
 let cfg = InertiaConfig::new().root_view(
-    ViteRootView::dev()
+    ViteRootView::auto("dist/.vite/manifest.json")?
         .title("Acme")
         .entry("frontend/app.tsx")
-        .dev_server("http://localhost:5173")
-        .react_refresh(true), // necessary for @vitejs/plugin-react
+        .react_refresh(true)   // dev only; necessary for @vitejs/plugin-react
+        .asset_base("/build"), // production only
 );
+
+// Serve the built files in production:
+// .nest_service("/build", tower_http::services::ServeDir::new("dist"))
 ```
 
-**Production.** `vite build` writes `dist/.vite/manifest.json`. `ViteRootView::production` reads it and emits the entry script, its CSS, and `modulepreload` links for imported chunks:
+The manifest is read in a release build only. A setter of one mode has no effect in the other mode. For explicit control, use the two constructors:
+
+**Development.** Script tags point at the Vite dev server:
+
+```rust,ignore
+ViteRootView::dev()
+    .title("Acme")
+    .entry("frontend/app.tsx")
+    .dev_server("http://localhost:5173")
+    .react_refresh(true)
+```
+
+**Production.** `vite build` writes `dist/.vite/manifest.json`. `ViteRootView::production` uses it to emit the entry script, its CSS, and `modulepreload` links for imported chunks:
 
 ```rust,ignore
 use veer::{ViteManifest, ViteRootView};
 
-let manifest = ViteManifest::load("dist/.vite/manifest.json")?;
-let version = manifest.hash(); // changes when a chunk changes
-
-let cfg = InertiaConfig::new()
-    .version(move || version.clone().into())
-    .root_view(
-        ViteRootView::production()
-            .title("Acme")
-            .entry("frontend/app.tsx")
-            .manifest(manifest)
-            .asset_base("/build"),
-    );
-
-// Serve the built files:
-// .nest_service("/build", tower_http::services::ServeDir::new("dist"))
+ViteRootView::production()
+    .title("Acme")
+    .entry("frontend/app.tsx")
+    .manifest(ViteManifest::load("dist/.vite/manifest.json")?)
+    .asset_base("/build")
 ```
 
-With `version` set to `manifest.hash()`, each new build makes old clients reload. You do not change a version by hand.
+**Asset version.** In production mode, the hash of the manifest is the asset version, so each new build makes old clients reload. You do not set a version by hand. `InertiaConfig::version` or `version_str` overrides it.
 
 ## Server-side rendering
 
@@ -106,10 +111,8 @@ use veer::{EmbeddedAssets, ViteManifest, ViteRootView};
 struct Assets;
 
 let manifest: ViteManifest = include_str!("../dist/.vite/manifest.json").parse()?;
-let version = manifest.hash();
 
 let cfg = InertiaConfig::new()
-    .version(move || version.clone().into())
     .root_view(ViteRootView::production().entry("frontend/app.tsx").manifest(manifest));
 
 let app = router()

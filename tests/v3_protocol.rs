@@ -589,7 +589,11 @@ async fn back_does_not_use_a_stored_url_that_points_at_another_origin() {
         .oneshot(req_inertia("GET", "//evil.example/x", "v1"))
         .await
         .unwrap();
-    assert_eq!(*session.previous_url.lock().await, None);
+    // The leading slashes are collapsed: the stored URL is a path of this site.
+    assert_eq!(
+        session.previous_url.lock().await.as_deref(),
+        Some("/evil.example/x")
+    );
 
     // An empty 200 goes back to the stored URL when there is no Referer.
     *session.previous_url.lock().await = Some("/users".into());

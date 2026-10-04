@@ -206,9 +206,17 @@ pub fn generate(out: impl AsRef<Path>) -> Result<(), GenerateError> {
     if let Some(parent) = out.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let body = render();
-    std::fs::write(out, body)?;
+    write_if_changed(out, &render())?;
     Ok(())
+}
+
+/// Write `content` only if the file does not have it already, so that a
+/// file watcher (Vite) sees a change only when there is one.
+fn write_if_changed(path: &Path, content: &str) -> io::Result<()> {
+    if std::fs::read_to_string(path).is_ok_and(|current| current == content) {
+        return Ok(());
+    }
+    std::fs::write(path, content)
 }
 
 /// Shortcut for `Split::new(dir).generate()` — Wayfinder-style split output
@@ -256,9 +264,11 @@ pub fn generate_split(dir: impl AsRef<Path>) -> Result<(), GenerateError> {
 /// # }
 /// ```
 ///
-/// Existing files inside the actions directory are NOT cleaned up. Stale
-/// files can appear if you rename or remove a controller — delete the
-/// directory manually before regenerating if that matters.
+/// A file is written only when its content changes. The file of a controller
+/// that no longer exists is deleted, if all of these are true: the actions
+/// directory is a subdirectory (not `actions_dir("")`), the file has the veer
+/// header and the prefix and suffix of this configuration, and at least one
+/// route is registered. Other files are not touched.
 pub struct Split {
     dir: std::path::PathBuf,
     actions_dir: String,
@@ -310,13 +320,42 @@ impl Split {
 
         let controllers = routes::render_per_controller();
 
+        let mut written = vec![self.dir.join("index.ts")];
         for (name, body) in &controllers {
             let mut file = String::new();
             file.push_str(HEADER);
             file.push('\n');
             file.push_str(body);
             let filename = format!("{}{}{}.ts", self.file_prefix, name, self.file_suffix);
-            std::fs::write(actions_path.join(filename), file)?;
+            let path = actions_path.join(filename);
+            write_if_changed(&path, &file)?;
+            written.push(path);
+        }
+
+        // Remove the files of controllers that no longer exist. Only in a
+        // directory of its own, only names of this configuration, and not when
+        // no route is registered (the router was not built before this call).
+        let sweep = !self.actions_dir.is_empty() && !controllers.is_empty();
+        for entry in sweep
+            .then(|| std::fs::read_dir(&actions_path))
+            .transpose()?
+            .into_iter()
+            .flatten()
+        {
+            let path = entry?.path();
+            let is_ours = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .and_then(|name| name.strip_suffix(".ts"))
+                .is_some_and(|stem| {
+                    stem.starts_with(&self.file_prefix) && stem.ends_with(&self.file_suffix)
+                });
+            let is_stale = is_ours
+                && !written.contains(&path)
+                && std::fs::read_to_string(&path).is_ok_and(|s| s.starts_with(HEADER));
+            if is_stale {
+                std::fs::remove_file(&path)?;
+            }
         }
 
         let mut index = String::new();
@@ -337,7 +376,7 @@ impl Split {
             };
             let _ = writeln!(index, "export * as {name} from \"{rel}\";");
         }
-        std::fs::write(self.dir.join("index.ts"), index)?;
+        write_if_changed(&self.dir.join("index.ts"), &index)?;
         Ok(())
     }
 }
@@ -433,3 +472,43 @@ export type ErrorBag = Record<string, string>;
 
 export type Flash = Record<string, unknown>;
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn split_removes_stale_generated_files_only() {
+        crate::bindings::register_runtime_route("sweep.index", "/sweep", "GET");
+        let dir = std::env::temp_dir().join(format!("veer-split-{}", std::process::id()));
+        let actions = dir.join("actions");
+        std::fs::create_dir_all(&actions).unwrap();
+        let generated = format!("{HEADER}\nexport {{}};");
+        let stale = actions.join("removed.ts");
+        let other_config = actions.join("removed-controller.ts");
+        let own = actions.join("helpers.ts");
+        let bundle = dir.join("bundle.ts");
+        std::fs::write(&stale, &generated).unwrap();
+        std::fs::write(&other_config, &generated).unwrap();
+        std::fs::write(&own, "export const mine = 1;").unwrap();
+        std::fs::write(&bundle, &generated).unwrap();
+
+        Split::new(&dir).generate().unwrap();
+        assert!(!stale.exists() && !other_config.exists());
+        assert!(own.exists() && actions.join("sweep.ts").exists());
+
+        // A flat layout shares its directory with other files: no sweep.
+        Split::new(&dir).actions_dir("").generate().unwrap();
+        assert!(bundle.exists());
+
+        // A suffix limits the sweep to names with that suffix.
+        std::fs::write(&stale, &generated).unwrap();
+        std::fs::write(&other_config, &generated).unwrap();
+        Split::new(&dir)
+            .file_suffix("-controller")
+            .generate()
+            .unwrap();
+        assert!(stale.exists() && !other_config.exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+}

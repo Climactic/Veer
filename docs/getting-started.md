@@ -24,7 +24,6 @@ use veer::{Inertia, InertiaConfig, InertiaLayer, MinimalRootView};
 #[tokio::main]
 async fn main() {
     let cfg = InertiaConfig::new()
-        .version(|| "1".into())
         .root_view(
             MinimalRootView::new()
                 .title("Acme")
@@ -44,7 +43,7 @@ async fn main() {
 
 There are three parts:
 
-- **`InertiaConfig`** is built once at startup. It holds the asset version, the root view (the HTML shell), and optional parts: a session store, an SSR client, shared props.
+- **`InertiaConfig`** is built once at startup. It holds the root view (the HTML shell), and optional parts: a session store, an SSR client, shared props.
 - **`Inertia`** is an axum extractor. `inertia.render(component, props)` returns an `InertiaResponse` builder. `props` is any `Serialize` value: a struct or `serde_json::json!`.
 - **`InertiaLayer`** does the protocol work after your handler returns.
 
@@ -103,16 +102,23 @@ createInertiaApp({
 
 ## Asset versioning
 
-`InertiaConfig::version` returns a string that changes when your assets change. When a client sends an old version, veer answers `409` and the client does a full reload. With Vite, use the manifest hash:
+The asset version is a string that changes when your assets change. When a client sends an old version, veer answers `409` and the client does a full reload.
 
-```rust,ignore
-let manifest = ViteManifest::load("dist/.vite/manifest.json")?;
-let version = manifest.hash();
-let cfg = InertiaConfig::new().version(move || version.clone().into());
-```
+With `ViteRootView` in production mode, the version is the hash of the Vite manifest; you set nothing. Without it, the version is `"1"`. Set your own with `InertiaConfig::version_str("…")`, or with `InertiaConfig::version(|| …)` for a value that changes while the server runs.
+
+## When something is wrong
+
+Veer tells you about a wrong setup. In a debug build, the cause is in the response body; it is always in the log (`tracing`).
+
+| Symptom | Cause |
+|---|---|
+| `500`: "not inside `InertiaLayer`" | A handler uses the `Inertia` extractor, but its route has no `InertiaLayer` |
+| `500`: "the props of … did not serialize" | The props value is not valid JSON, for example a map with keys that are not strings |
+| Warning: "there is no session store" | A redirect has errors or flash data, but the config has no [session store](sessions.md) |
 
 ## Next steps
 
 - [Props](props.md): load data only when the page needs it.
 - [Forms and validation](forms-and-validation.md): handle a form submit with errors and a flash message.
+- [Error pages](error-pages.md) and [Testing](testing.md).
 - [`examples/axum-react-todo`](../examples/axum-react-todo): a complete app.

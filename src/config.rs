@@ -16,7 +16,7 @@ type VersionFn = Arc<dyn Fn() -> Cow<'static, str> + Send + Sync>;
 /// Top-level app config. Built once at startup, cloned by Arc into each request.
 #[derive(Clone)]
 pub struct InertiaConfig {
-    pub(crate) version: VersionFn,
+    pub(crate) version: Option<VersionFn>,
     pub(crate) root_view: Arc<dyn RootView>,
     pub(crate) session: Option<Arc<dyn SessionStore>>,
     pub(crate) ssr: Option<Arc<dyn SsrClient>>,
@@ -35,7 +35,7 @@ pub struct InertiaConfig {
 impl Default for InertiaConfig {
     fn default() -> Self {
         Self {
-            version: Arc::new(|| Cow::Borrowed("1")),
+            version: None,
             root_view: Arc::new(MinimalRootView::new()),
             session: None,
             ssr: None,
@@ -59,13 +59,32 @@ impl InertiaConfig {
         Self::default()
     }
 
-    /// Set asset version producer.
+    /// Set asset version producer. Without one, the version comes from the
+    /// root view ([`RootView::version`]; the manifest hash for a production
+    /// [`crate::ViteRootView`]), and is `"1"` if the root view has none.
     pub fn version<F>(mut self, f: F) -> Self
     where
         F: Fn() -> Cow<'static, str> + Send + Sync + 'static,
     {
-        self.version = Arc::new(f);
+        self.version = Some(Arc::new(f));
         self
+    }
+
+    /// Set a constant asset version.
+    pub fn version_str(self, version: impl Into<Cow<'static, str>>) -> Self {
+        let version = version.into();
+        self.version(move || version.clone())
+    }
+
+    /// The asset version of this moment.
+    pub(crate) fn current_version(&self) -> Cow<'static, str> {
+        match &self.version {
+            Some(f) => f(),
+            None => self
+                .root_view
+                .version()
+                .map_or(Cow::Borrowed("1"), Cow::Owned),
+        }
     }
 
     /// Set the root view used for non-XHR responses.
@@ -98,10 +117,35 @@ impl InertiaConfig {
         self
     }
 
-    /// Set shared props.
+    /// Set shared props from a [`SharedProps`] implementation. For a closure,
+    /// use [`Self::share`].
     pub fn shared<P: SharedProps + 'static>(mut self, p: P) -> Self {
         self.shared = Some(Arc::new(p));
         self
+    }
+
+    /// Share props with every page. The closure runs on each page render and
+    /// returns any `Serialize` value that serializes to an object:
+    ///
+    /// ```
+    /// # use veer::InertiaConfig;
+    /// # #[derive(Clone, serde::Serialize)] struct User { name: String }
+    /// let config = InertiaConfig::new().share(|req| {
+    ///     // Put there by your auth middleware.
+    ///     let user = req.extension::<User>().cloned();
+    ///     async move { serde_json::json!({ "auth": { "user": user } }) }
+    /// });
+    /// ```
+    pub fn share<F, Fut, T>(self, f: F) -> Self
+    where
+        F: Fn(&RequestInfo) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = T> + Send + 'static,
+        T: serde::Serialize,
+    {
+        self.shared(crate::shared::FnSharedProps(move |req: &RequestInfo| {
+            let value = f(req);
+            async { crate::props::prop::to_json(value.await) }
+        }))
     }
 
     /// Share a once prop with every page. The closure runs only when the
@@ -182,6 +226,37 @@ mod tests {
             .ssr_required(true);
         assert!(c.csr_only);
         assert!(c.ssr_required);
-        assert_eq!((c.version)(), "v9");
+        assert_eq!(c.current_version(), "v9");
+    }
+
+    #[test]
+    fn version_defaults_to_the_root_view_then_to_1() {
+        struct Versioned;
+        impl RootView for Versioned {
+            fn render(&self, _: crate::RootViewContext<'_>) -> Result<String, String> {
+                Ok(String::new())
+            }
+            fn version(&self) -> Option<String> {
+                Some("abc".into())
+            }
+        }
+        assert_eq!(InertiaConfig::new().current_version(), "1");
+        let c = InertiaConfig::new().root_view(Versioned);
+        assert_eq!(c.current_version(), "abc");
+        assert_eq!(c.version_str("v2").current_version(), "v2");
+    }
+
+    #[tokio::test]
+    async fn share_reads_request_extensions() {
+        let c = InertiaConfig::new().share(|req| {
+            let user = req.extension::<&'static str>().copied();
+            async move { serde_json::json!({ "user": user }) }
+        });
+        let mut extensions = http::Extensions::new();
+        extensions.insert("ada");
+        let req = RequestInfo::from_parts(http::Method::GET, "/".into(), &http::HeaderMap::new())
+            .with_extensions(Arc::new(extensions));
+        let shared = c.shared.unwrap().shared(&req).await;
+        assert_eq!(shared, serde_json::json!({ "user": "ada" }));
     }
 }

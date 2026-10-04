@@ -2,14 +2,13 @@ pub mod todos;
 
 use axum::extract::{Path, Query, State};
 use axum::response::IntoResponse;
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::time::Duration;
 use todos::{
     Feed, FeedItem, HomeProps, NewTodo, ShowcaseProps, Stats, TodoStore, TodosCreateProps,
     TodosIndexProps,
 };
-use validator::Validate;
-use veer::{Inertia, InertiaForm, Method::*, Prop, ScrollMetadata};
+use veer::{Inertia, Method::*, Prop, ScrollMetadata, Validated};
 
 /// Build the named-route table. Used by `main.rs` for serving and by
 /// `src/bin/gen-bindings.rs` to populate the TS bindings registry.
@@ -38,12 +37,9 @@ async fn showcase(
 ) -> impl IntoResponse {
     let page = query.page.unwrap_or(1).clamp(1, 3);
     inertia
-        .render(
-            "showcase",
-            ShowcaseProps {
-                order_id: 900_719_925_474_099_988,
-            },
-        )
+        .page(ShowcaseProps {
+            order_id: 900_719_925_474_099_988,
+        })
         .preserve_big_integers(true)
         .once("plans", || async { vec!["Free", "Pro", "Team"] })
         .deferred("stats", "default", move || async move {
@@ -78,44 +74,35 @@ async fn showcase(
 async fn showcase_jump(inertia: Inertia) -> impl IntoResponse {
     inertia
         .redirect("/showcase#feed")
-        .with_flash("success", json!("Jumped to the feed"))
+        .with_flash("success", "Jumped to the feed")
 }
 
 async fn home(inertia: Inertia) -> impl axum::response::IntoResponse {
-    inertia.render("home", HomeProps {})
+    inertia.page(HomeProps {})
 }
 
 async fn todos_index(
     inertia: Inertia,
     State(store): State<TodoStore>,
 ) -> impl axum::response::IntoResponse {
-    inertia.render("todos/index", TodosIndexProps { todos: store.all() })
+    inertia.page(TodosIndexProps { todos: store.all() })
 }
 
 async fn todos_new(inertia: Inertia) -> impl axum::response::IntoResponse {
-    inertia.render("todos/create", TodosCreateProps {})
+    inertia.page(TodosCreateProps {})
 }
 
+/// `Validated` answers live validation (Precognition) and sends invalid
+/// input back to the form with the errors. This handler runs for valid input.
 async fn todos_create(
     inertia: Inertia,
     State(store): State<TodoStore>,
-    InertiaForm(body): InertiaForm<NewTodo>,
-) -> axum::response::Response {
-    // Live validation (Precognition): answer and do not create the todo.
-    if let Some(precognition) = inertia.precognition() {
-        return precognition.respond(body.validate());
-    }
-    if let Err(errors) = body.validate() {
-        return inertia
-            .with_errors(errors)
-            .redirect("/todos/new")
-            .into_response();
-    }
+    Validated(body): Validated<NewTodo>,
+) -> impl IntoResponse {
     store.add(body.title);
     inertia
         .redirect("/todos")
-        .with_flash("success", json!("Todo created"))
-        .into_response()
+        .with_flash("success", "Todo created")
 }
 
 async fn todos_delete(
@@ -128,5 +115,5 @@ async fn todos_delete(
     } else {
         "Todo not found"
     };
-    inertia.redirect("/todos").with_flash("success", json!(msg))
+    inertia.redirect("/todos").with_flash("success", msg)
 }

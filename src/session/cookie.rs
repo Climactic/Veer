@@ -52,20 +52,26 @@ impl CookieSessionStore {
         self
     }
 
-    fn sign(&self, payload: &[u8]) -> String {
+    /// `name` is the cookie name. It is part of the signed data, so that the
+    /// value of one cookie is not valid as another cookie.
+    fn sign(&self, name: &str, payload: &[u8]) -> String {
         let mut mac = HmacSha256::new_from_slice(&self.key).expect("hmac key");
+        mac.update(name.as_bytes());
+        mac.update(b"=");
         mac.update(payload);
         URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes())
     }
 
     /// Verify a signature in constant time using HMAC's built-in `verify_slice`.
-    fn verify(&self, payload: &[u8], sig_b64: &str) -> bool {
+    fn verify(&self, name: &str, payload: &[u8], sig_b64: &str) -> bool {
         let Ok(sig_bytes) = URL_SAFE_NO_PAD.decode(sig_b64) else {
             return false;
         };
         let Ok(mut mac) = HmacSha256::new_from_slice(&self.key) else {
             return false;
         };
+        mac.update(name.as_bytes());
+        mac.update(b"=");
         mac.update(payload);
         mac.verify_slice(&sig_bytes).is_ok()
     }
@@ -73,13 +79,13 @@ impl CookieSessionStore {
     fn encode(&self, flash: &Flash) -> String {
         let payload = serde_json::to_vec(flash).unwrap();
         let b64 = URL_SAFE_NO_PAD.encode(&payload);
-        let sig = self.sign(b64.as_bytes());
+        let sig = self.sign(COOKIE_NAME, b64.as_bytes());
         format!("{b64}.{sig}")
     }
 
     fn decode(&self, raw: &str) -> Option<Flash> {
         let (b64, sig) = raw.split_once('.')?;
-        if !self.verify(b64.as_bytes(), sig) {
+        if !self.verify(COOKIE_NAME, b64.as_bytes(), sig) {
             return None;
         }
         let bytes = URL_SAFE_NO_PAD.decode(b64).ok()?;
@@ -150,7 +156,7 @@ impl SessionStore for CookieSessionStore {
     async fn previous_url(&self, req: &RequestParts) -> Option<String> {
         let raw = read_cookie(req, PREVIOUS_URL_COOKIE)?;
         let (b64, sig) = raw.split_once('.')?;
-        if !self.verify(b64.as_bytes(), sig) {
+        if !self.verify(PREVIOUS_URL_COOKIE, b64.as_bytes(), sig) {
             return None;
         }
         String::from_utf8(URL_SAFE_NO_PAD.decode(b64).ok()?).ok()
@@ -163,7 +169,7 @@ impl SessionStore for CookieSessionStore {
         url: &str,
     ) {
         let b64 = URL_SAFE_NO_PAD.encode(url);
-        let value = format!("{b64}.{}", self.sign(b64.as_bytes()));
+        let value = format!("{b64}.{}", self.sign(PREVIOUS_URL_COOKIE, b64.as_bytes()));
         self.set_cookie(headers, PREVIOUS_URL_COOKIE, value, PREVIOUS_URL_MAX_AGE);
     }
 }
@@ -225,6 +231,12 @@ mod tests {
             Some("/users?page=2")
         );
         assert_eq!(store.previous_url(&request("L2V2aWw.bad")).await, None);
+        // A signed value of one cookie is not valid as the other cookie.
+        let as_flash = Request::builder().header(header::COOKIE, format!("{COOKIE_NAME}={value}"));
+        let as_flash = as_flash.body(()).unwrap().into_parts().0;
+        assert!(store.read_and_clear(&as_flash).await.is_empty());
+        let flash_value = store.encode(&Flash::default());
+        assert_eq!(store.previous_url(&request(&flash_value)).await, None);
     }
 
     #[tokio::test]

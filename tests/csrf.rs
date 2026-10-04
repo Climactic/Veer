@@ -181,3 +181,12 @@ async fn exclude_without_leading_slash_still_matches() {
     let resp = app.oneshot(req("POST", "/webhooks/stripe")).await.unwrap();
     assert_eq!(resp.status(), 200);
 }
+
+#[tokio::test]
+async fn unknown_method_without_token_is_419() {
+    let app = Router::new()
+        .route("/any", axum::routing::any(|| async { "done" }))
+        .layer(CsrfLayer::new(SECRET.to_vec()).secure(false));
+    let resp = app.oneshot(req("PURGE", "/any")).await.unwrap();
+    assert_eq!(resp.status().as_u16(), 419);
+}

@@ -16,7 +16,7 @@
 //!     .named_route(GET,    "home",           "/",          home)
 //!     .named_route(GET,    "todos.index",    "/todos",     index)
 //!     .named_route(POST,   "todos.store",    "/todos",     store)
-//!     .named_route(DELETE, "todos.destroy",  "/todos/:id", destroy)
+//!     .named_route(DELETE, "todos.destroy",  "/todos/{id}", destroy)
 //!     .build();
 //! # }
 //! ```

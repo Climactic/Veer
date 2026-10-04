@@ -47,17 +47,18 @@ impl Inertia {
     /// Render a component with strongly-typed props.
     #[track_caller]
     pub fn render<P: Serialize>(&self, component: impl Into<String>, props: P) -> InertiaResponse {
-        let caller = std::panic::Location::caller();
-        let value = match serde_json::to_value(&props) {
-            Ok(v) => v,
-            Err(e) => {
-                tracing::error!(error = %e, "veer: failed to serialize props for render; using null");
-                Value::Null
-            }
-        };
-        let mut response = InertiaResponse::new(component, value);
-        response.render_source = Some(caller);
-        response
+        InertiaResponse::render(component, props)
+    }
+
+    /// Render the page that `props` belongs to. The component name comes from
+    /// [`register_page!`](crate::register_page), so it is written one time.
+    #[cfg(feature = "ts")]
+    #[track_caller]
+    pub fn page<P>(&self, props: P) -> InertiaResponse
+    where
+        P: Serialize + crate::bindings::InertiaPageProps,
+    {
+        InertiaResponse::render(P::COMPONENT, props)
     }
 
     /// Internal redirect (303 on POST/PUT/PATCH/DELETE; 302-equivalent SeeOther on GET).

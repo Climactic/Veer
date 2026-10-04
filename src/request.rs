@@ -1,7 +1,8 @@
 //! Per-request data parsed from Inertia headers.
 
-use http::{HeaderMap, Method};
+use http::{Extensions, HeaderMap, Method};
 use std::collections::HashSet;
+use std::sync::Arc;
 
 /// Request information needed to drive the Inertia protocol.
 #[derive(Debug, Clone)]
@@ -11,10 +12,9 @@ pub struct RequestInfo {
     pub method: Method,
     /// Full URL the client is currently at (path + query).
     pub url: String,
-    /// Value of the `Referer` header, if present.
-    ///
-    /// Used by [`crate::inertia::Inertia::back()`] to redirect the client to the
-    /// previous page. Falls back to `"/"` when absent.
+    /// The path and query of the `Referer` header. The scheme and the host are
+    /// dropped, so that [`crate::inertia::Inertia::back()`] cannot redirect to
+    /// another site.
     pub referer: Option<String>,
     /// `true` iff `X-Inertia: true` was set.
     pub is_inertia: bool,
@@ -40,6 +40,9 @@ pub struct RequestInfo {
     pub is_precognition: bool,
     /// Fields from `Precognition-Validate-Only`. Empty means all fields.
     pub validate_only: HashSet<String>,
+    /// The request extensions, as they were when the request reached the
+    /// adapter. Read one with [`RequestInfo::extension`].
+    pub extensions: Arc<Extensions>,
 }
 
 impl RequestInfo {
@@ -62,7 +65,7 @@ impl RequestInfo {
         let client_version = text(&crate::headers::X_INERTIA_VERSION).map(str::to_owned);
         let partial_component =
             text(&crate::headers::X_INERTIA_PARTIAL_COMPONENT).map(str::to_owned);
-        let referer = text(&http::header::REFERER).map(str::to_owned);
+        let referer = text(&http::header::REFERER).and_then(local_path);
         Self {
             method,
             url,
@@ -82,7 +85,28 @@ impl RequestInfo {
             is_prefetch: text(&crate::headers::PURPOSE) == Some("prefetch"),
             is_precognition: text(&crate::headers::PRECOGNITION) == Some("true"),
             validate_only: split_csv(headers, &crate::headers::PRECOGNITION_VALIDATE_ONLY),
+            extensions: Arc::default(),
         }
+    }
+
+    /// The URL of a request: path and query. Leading slashes are collapsed,
+    /// because a browser reads `//host/path` as a URL of another site.
+    pub fn url_of(uri: &http::Uri) -> String {
+        let url = uri.path_and_query().map_or(uri.path(), |p| p.as_str());
+        format!("/{}", url.trim_start_matches(['/', '\\']))
+    }
+
+    /// Attach the request extensions; used by adapters.
+    pub fn with_extensions(mut self, extensions: Arc<Extensions>) -> Self {
+        self.extensions = extensions;
+        self
+    }
+
+    /// A value that a middleware put in the request extensions (the signed-in
+    /// user, a session handle, a locale). The middleware must run before the
+    /// Inertia layer: add its layer after `InertiaLayer`.
+    pub fn extension<T: Send + Sync + 'static>(&self) -> Option<&T> {
+        self.extensions.get()
     }
 
     /// Returns `true` if the request is a partial reload (component header set + only/except non-empty).
@@ -92,10 +116,62 @@ impl RequestInfo {
     }
 }
 
+/// The path and query of `referer`. Only the path is kept, so the result is
+/// always a URL of this site. The host is not compared with the request: it
+/// is not reliable behind a proxy or on HTTP/2, and the path alone cannot
+/// point at another site.
+fn local_path(referer: &str) -> Option<String> {
+    let path = if referer.starts_with('/') {
+        referer.to_owned()
+    } else {
+        let uri: http::Uri = referer.parse().ok()?;
+        // An absolute URL has a scheme; anything else is not a Referer.
+        uri.scheme()?;
+        uri.path_and_query().map_or("/", |p| p.as_str()).to_owned()
+    };
+    // `//host` and `/\host` are URLs of another site for a browser.
+    let is_local = path.starts_with('/') && !path[1..].starts_with(['/', '\\']);
+    is_local.then_some(path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use http::HeaderValue;
+
+    #[test]
+    fn referer_keeps_only_a_local_path() {
+        let referer = |value: &str| {
+            let mut h = HeaderMap::new();
+            h.insert("referer", hv(value));
+            RequestInfo::from_parts(Method::POST, "/".into(), &h).referer
+        };
+        assert_eq!(referer("/form?a=1").as_deref(), Some("/form?a=1"));
+        assert_eq!(
+            referer("https://app.test:3000/form?a=1").as_deref(),
+            Some("/form?a=1")
+        );
+        assert_eq!(referer("http://app.test").as_deref(), Some("/"));
+        // The host of another site is dropped; the path stays on this site.
+        assert_eq!(referer("https://evil.test/form").as_deref(), Some("/form"));
+        for other in [
+            "//evil.test/form",
+            "/\\evil.test",
+            "http://app.test//evil.test",
+            "javascript:alert(1)",
+            "not a url",
+        ] {
+            assert_eq!(referer(other), None, "{other}");
+        }
+    }
+
+    #[test]
+    fn url_of_collapses_leading_slashes() {
+        let url = |s: &str| RequestInfo::url_of(&s.parse().unwrap());
+        assert_eq!(url("/users?page=2"), "/users?page=2");
+        assert_eq!(url("//evil.test/x"), "/evil.test/x");
+        assert_eq!(url("/"), "/");
+    }
 
     fn hv(s: &str) -> HeaderValue {
         HeaderValue::from_str(s).unwrap()
@@ -116,10 +192,7 @@ mod tests {
         let mut h = HeaderMap::new();
         h.insert(http::header::REFERER, hv("https://example.com/previous"));
         let info = RequestInfo::from_parts(Method::POST, "/submit".into(), &h);
-        assert_eq!(
-            info.referer.as_deref(),
-            Some("https://example.com/previous")
-        );
+        assert_eq!(info.referer.as_deref(), Some("/previous"));
     }
 
     #[test]

@@ -8,7 +8,7 @@ use super::{RootView, RootViewContext};
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 /// Parsed `dist/.vite/manifest.json` produced by `vite build`.
@@ -33,14 +33,29 @@ struct ViteChunk {
     imports: Vec<String>,
 }
 
+/// A failure to load a [`ViteManifest`].
+#[derive(Debug, thiserror::Error)]
+pub enum ViteManifestError {
+    /// The manifest file could not be read.
+    #[error("vite manifest read `{}`: {source}", path.display())]
+    Read {
+        /// The path that was read.
+        path: PathBuf,
+        /// The I/O error.
+        source: std::io::Error,
+    },
+    /// The manifest is not valid JSON of the expected shape.
+    #[error("vite manifest parse: {0}")]
+    Parse(#[from] serde_json::Error),
+}
+
 impl FromStr for ViteManifest {
-    type Err = String;
+    type Err = ViteManifestError;
 
     /// Parse a manifest from a JSON string. Useful in tests or when the file
     /// has already been read (e.g. embedded via `include_str!`).
     fn from_str(json: &str) -> Result<Self, Self::Err> {
-        let entries: BTreeMap<String, ViteChunk> =
-            serde_json::from_str(json).map_err(|e| format!("vite manifest parse: {e}"))?;
+        let entries: BTreeMap<String, ViteChunk> = serde_json::from_str(json)?;
         let mut hasher = DefaultHasher::new();
         // Hash the canonicalized form (BTreeMap iteration is stable on key
         // order) so two equivalent manifests with different key ordering
@@ -64,10 +79,13 @@ impl FromStr for ViteManifest {
 
 impl ViteManifest {
     /// Read and parse the manifest from `path`.
-    pub fn load(path: impl AsRef<Path>) -> Result<Self, String> {
-        let bytes = std::fs::read_to_string(path.as_ref())
-            .map_err(|e| format!("vite manifest read: {e}"))?;
-        bytes.parse()
+    pub fn load(path: impl AsRef<Path>) -> Result<Self, ViteManifestError> {
+        let path = path.as_ref();
+        let json = std::fs::read_to_string(path).map_err(|source| ViteManifestError::Read {
+            path: path.to_path_buf(),
+            source,
+        })?;
+        json.parse()
     }
 
     /// Stable, opaque identifier for this manifest. Two equal manifests
@@ -140,6 +158,28 @@ impl ViteRootView {
         }
     }
 
+    /// Dev mode in a debug build, production mode in a release build. The
+    /// manifest at `manifest_path` is read in a release build only.
+    ///
+    /// The mode-specific setters do nothing in the other mode, so one chain
+    /// serves both:
+    ///
+    /// ```no_run
+    /// # use veer::ViteRootView;
+    /// let view = ViteRootView::auto("dist/.vite/manifest.json")?
+    ///     .entry("frontend/app.tsx")
+    ///     .react_refresh(true) // dev only
+    ///     .asset_base("/build"); // production only
+    /// # Ok::<(), veer::ViteManifestError>(())
+    /// ```
+    pub fn auto(manifest_path: impl AsRef<Path>) -> Result<Self, ViteManifestError> {
+        if cfg!(debug_assertions) {
+            Ok(Self::dev())
+        } else {
+            Ok(Self::production().manifest(ViteManifest::load(manifest_path)?))
+        }
+    }
+
     /// Set `<title>`.
     pub fn title(mut self, t: impl Into<String>) -> Self {
         self.title = t.into();
@@ -161,12 +201,11 @@ impl ViteRootView {
         self
     }
 
-    /// Dev only: change the Vite dev server origin. Panics if called on a
-    /// production-mode builder.
+    /// Dev only: change the Vite dev server origin. No effect in production
+    /// mode.
     pub fn dev_server(mut self, url: impl Into<String>) -> Self {
-        match &mut self.mode {
-            Mode::Dev { dev_server, .. } => *dev_server = url.into(),
-            Mode::Production { .. } => panic!("dev_server() called on production ViteRootView"),
+        if let Mode::Dev { dev_server, .. } = &mut self.mode {
+            *dev_server = url.into();
         }
         self
     }
@@ -176,19 +215,16 @@ impl ViteRootView {
     /// server (e.g. SSR from your Rust app on `:3000` while Vite runs on
     /// `:5173`) — without it, React plugin throws "can't detect preamble".
     pub fn react_refresh(mut self, on: bool) -> Self {
-        match &mut self.mode {
-            Mode::Dev { react_refresh, .. } => *react_refresh = on,
-            Mode::Production { .. } => panic!("react_refresh() called on production ViteRootView"),
+        if let Mode::Dev { react_refresh, .. } = &mut self.mode {
+            *react_refresh = on;
         }
         self
     }
 
-    /// Production only: set the parsed manifest. Panics if called on a
-    /// dev-mode builder.
+    /// Production only: set the parsed manifest. No effect in dev mode.
     pub fn manifest(mut self, m: ViteManifest) -> Self {
-        match &mut self.mode {
-            Mode::Production { manifest, .. } => *manifest = m,
-            Mode::Dev { .. } => panic!("manifest() called on dev ViteRootView"),
+        if let Mode::Production { manifest, .. } = &mut self.mode {
+            *manifest = m;
         }
         self
     }
@@ -197,15 +233,21 @@ impl ViteRootView {
     /// `/build`, or an absolute CDN URL). Joined with each manifest `file`
     /// path with a single `/`.
     pub fn asset_base(mut self, base: impl Into<String>) -> Self {
-        match &mut self.mode {
-            Mode::Production { asset_base, .. } => *asset_base = base.into(),
-            Mode::Dev { .. } => panic!("asset_base() called on dev ViteRootView"),
+        if let Mode::Production { asset_base, .. } = &mut self.mode {
+            *asset_base = base.into();
         }
         self
     }
 }
 
 impl RootView for ViteRootView {
+    fn version(&self) -> Option<String> {
+        match &self.mode {
+            Mode::Dev { .. } => None,
+            Mode::Production { manifest, .. } => Some(manifest.hash()),
+        }
+    }
+
     fn render(&self, ctx: RootViewContext<'_>) -> Result<String, String> {
         let mut head = String::new();
         let vite_tags = match &self.mode {
@@ -264,9 +306,14 @@ fn render_dev(server: &str, entry: &str, react_refresh: bool) -> String {
         // Verbatim from @vitejs/plugin-react's docs — must run before any
         // React module loads. Origin is the Vite dev server so the
         // `/@react-refresh` virtual module resolves.
+        // A JSON string is a JavaScript string; `<` is escaped so that the
+        // value cannot close the script element.
+        let module = serde_json::Value::from(format!("{server}/@react-refresh"))
+            .to_string()
+            .replace('<', "\\u003c");
         out.push_str(&format!(
             r#"<script type="module">
-import RefreshRuntime from "{server}/@react-refresh"
+import RefreshRuntime from {module}
 RefreshRuntime.injectIntoGlobalHook(window)
 window.$RefreshReg$ = () => {{}}
 window.$RefreshSig$ = () => (type) => type
@@ -278,7 +325,9 @@ window.__vite_plugin_react_preamble_installed__ = true
     out.push_str(&format!(
         r#"<script type="module" src="{server}/@vite/client"></script>
 <script type="module" src="{server}/{entry}"></script>
-"#
+"#,
+        server = html_escape(server),
+        entry = html_escape(entry),
     ));
     out
 }
@@ -292,7 +341,9 @@ fn render_production(
         .entries
         .get(entry)
         .ok_or_else(|| format!("vite manifest: entry {entry:?} not found"))?;
-    let base = asset_base.trim_end_matches('/');
+    let base = html_escape(asset_base.trim_end_matches('/'));
+    // File names come from the manifest; they go into attributes escaped.
+    let escaped = |file: &str| html_escape(file);
 
     let mut scripts = String::new();
     let mut styles = String::new();
@@ -303,12 +354,13 @@ fn render_production(
     scripts.push_str(&format!(
         r#"<script type="module" src="{base}/{file}"></script>
 "#,
-        file = chunk.file
+        file = escaped(&chunk.file)
     ));
     for css in &chunk.css {
         styles.push_str(&format!(
             r#"<link rel="stylesheet" href="{base}/{css}" />
-"#
+"#,
+            css = escaped(css)
         ));
     }
 
@@ -335,13 +387,15 @@ fn render_production(
     for file in &preload_js {
         scripts.push_str(&format!(
             r#"<link rel="modulepreload" href="{base}/{file}" />
-"#
+"#,
+            file = escaped(file)
         ));
     }
     for css in &preload_css {
         styles.push_str(&format!(
             r#"<link rel="stylesheet" href="{base}/{css}" />
-"#
+"#,
+            css = escaped(css)
         ));
     }
 
@@ -501,6 +555,26 @@ mod tests {
             r#"<script data-page="app" type="application/json">{"component":"home"}</script>"#
         ));
         assert!(html.contains(r#"<div id="app"></div>"#));
+    }
+
+    #[test]
+    fn version_is_the_manifest_hash_in_production_only() {
+        let manifest =
+            ViteManifest::from_str(r#"{"frontend/app.tsx": {"file": "assets/app-1.js"}}"#).unwrap();
+        // Setters of the other mode have no effect and do not panic.
+        let production = ViteRootView::production()
+            .manifest(manifest.clone())
+            .react_refresh(true)
+            .dev_server("http://localhost:1");
+        assert_eq!(production.version(), Some(manifest.hash()));
+        let dev = ViteRootView::dev().manifest(manifest).asset_base("/x");
+        assert_eq!(dev.version(), None);
+    }
+
+    #[test]
+    fn load_error_names_the_path() {
+        let error = ViteManifest::load("no/such/manifest.json").unwrap_err();
+        assert!(error.to_string().contains("no/such/manifest.json"));
     }
 
     #[test]

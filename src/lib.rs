@@ -13,7 +13,6 @@
 //!
 //! # async fn run() {
 //! let config = InertiaConfig::new()
-//!     .version(|| "1".into())
 //!     .root_view(MinimalRootView::new().title("Acme").vite_entry("/src/main.tsx"));
 //!
 //! let app: Router = Router::new()
@@ -39,6 +38,7 @@
 //! | `embed` | off | Embedded-asset serving service (`EmbeddedAssets`) |
 //! | `devtools` | off | Recorder + read API for the Inertia DevTools browser extension |
 //! | `ts` | off | TypeScript bindings codegen (`ts-rs` + `inventory`) |
+//! | `testing` | off | Helpers for tests of your handlers ([`testing`]) |
 //!
 //! # Architecture
 //!
@@ -53,6 +53,7 @@
 //! - `Always<T>` and `Merge<T>` wrappers are detected at any depth and through
 //!   any serialization path (typed structs, `serde_json::json!`, hand-built
 //!   `Value`s). A nested wrapper acts at its dot path (`posts.data`).
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(missing_docs)]
 #![warn(rust_2018_idioms)]
 
@@ -107,15 +108,26 @@ pub use page::PageObject;
 pub use props::{Always, Merge, Prop, ScrollMetadata};
 pub use request::RequestInfo;
 pub use response::InertiaResponse;
-pub use root_view::{MinimalRootView, RootView, RootViewContext, ViteManifest, ViteRootView};
+pub use root_view::{
+    MinimalRootView, RootView, RootViewContext, ViteManifest, ViteManifestError, ViteRootView,
+};
 pub use session::{Flash, SessionStore};
 pub use shared::SharedProps;
 pub use ssr::{SsrClient, SsrPayload};
 
 #[cfg(feature = "axum")]
 pub use adapters::axum::{
-    InertiaForm, InertiaFormRejection, InertiaLayer, Method, Precognition, Router,
+    InertiaForm, InertiaFormRejection, InertiaLayer, Method, MissingInertiaLayer, Precognition,
+    Router,
 };
+
+#[cfg(all(feature = "axum", feature = "garde"))]
+pub use adapters::axum::GardeValidated;
+#[cfg(all(feature = "axum", feature = "validator"))]
+pub use adapters::axum::Validated;
+
+#[cfg(feature = "testing")]
+pub mod testing;
 
 #[cfg(feature = "csrf")]
 pub use adapters::axum::CsrfLayer;
