@@ -5,7 +5,7 @@ The Inertia client reads an `XSRF-TOKEN` cookie and sends its value in an `X-XSR
 Enable the `csrf` feature and add the layer outside `InertiaLayer`:
 
 ```toml
-veer = { version = "0.2", features = ["csrf"] }
+veer = { version = "0.3", features = ["csrf"] }
 ```
 
 ```rust,ignore

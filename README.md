@@ -68,7 +68,7 @@ Build modern single-page apps in React, Vue, or Svelte — without writing a JSO
 
 ```toml
 [dependencies]
-veer = "0.2"
+veer = "0.3"
 ```
 
 Or with `cargo add`:

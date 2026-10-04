@@ -7,7 +7,7 @@
 1. Enable the `devtools` Cargo feature. Without it, the recorder is not compiled into your binary.
 
    ```toml
-   veer = { version = "0.2", features = ["devtools"] }
+   veer = { version = "0.3", features = ["devtools"] }
    ```
 
 2. Turn the recorder on, in development only:

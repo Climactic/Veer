@@ -1,8 +1,8 @@
 # Upgrading
 
-## From 0.2 to the next version
+## From 0.2 to 0.3
 
-The next version makes failures visible and removes repeated code. Most apps compile without a change. The full list is in the [changelog](../CHANGELOG.md).
+Version 0.3 makes failures visible and removes repeated code. Most apps compile without a change. The full list is in the [changelog](../CHANGELOG.md).
 
 **Changes that can need an edit**
 

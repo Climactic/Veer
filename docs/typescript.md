@@ -4,7 +4,7 @@ With the `ts` feature, veer generates TypeScript from your Rust code: the props 
 
 ```toml
 [dependencies]
-veer = { version = "0.2", features = ["ts"] }
+veer = { version = "0.3", features = ["ts"] }
 ts-rs = "12"
 ```
 

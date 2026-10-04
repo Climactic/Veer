@@ -4,7 +4,7 @@ The `testing` feature has helpers for tests of your handlers. Enable it for test
 
 ```toml
 [dev-dependencies]
-veer = { version = "0.2", features = ["testing"] }
+veer = { version = "0.3", features = ["testing"] }
 tower = { version = "0.5", features = ["util"] }
 ```
 
