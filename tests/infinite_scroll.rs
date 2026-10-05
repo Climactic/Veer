@@ -10,15 +10,16 @@ async fn response(headers: &[(&str, &str)]) -> Value {
         .route(
             "/",
             get(|inertia: Inertia| async move {
-                inertia
-                    .render(
-                        "Users",
-                        json!({"users": {"data": [{"id": 3}], "total": 5}, "title": "Users"}),
-                    )
-                    .scroll(
-                        "users",
-                        ScrollMetadata::new("page", 2_u32, Some(1), Some(3)).match_on("id"),
-                    )
+                inertia.render("Users", json!({"title": "Users"})).prop(
+                    "users",
+                    veer::Prop::scroll(|| async {
+                        (
+                            json!({"data": [{"id": 3}], "total": 5}),
+                            ScrollMetadata::paged("page", 2, true),
+                        )
+                    })
+                    .match_on("data.id"),
+                )
             }),
         )
         .layer(InertiaLayer::new(
@@ -97,12 +98,9 @@ async fn excluded_scroll_props_have_no_metadata_or_merge_path() {
 
 #[test]
 fn cursor_boundaries_serialize_as_strings_or_null() {
-    let metadata = ScrollMetadata::new(
-        "cursor",
-        "current".to_string(),
-        None,
-        Some("next".to_string()),
-    );
+    let metadata = ScrollMetadata::new("cursor")
+        .current("current")
+        .next("next");
     let value = serde_json::to_value(metadata).unwrap();
     assert_eq!(value["currentPage"], "current");
     assert_eq!(value["nextPage"], "next");

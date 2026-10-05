@@ -1,13 +1,35 @@
 //! The Inertia "page object" — the JSON payload that drives the client adapter.
 
+use crate::props::ScrollMetadata;
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{Map, Value};
 use std::collections::BTreeMap;
+
+/// One entry of `onceProps`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct OnceEntry {
+    /// The prop path that holds the value.
+    pub prop: String,
+    /// Expiry as a Unix timestamp in milliseconds; `null` means no expiry.
+    #[serde(rename = "expiresAt")]
+    pub expires_at: Option<u64>,
+}
+
+/// One entry of `scrollProps`.
+#[derive(Debug, Clone, Serialize)]
+pub struct ScrollEntry {
+    /// Cursor data for the page that this response carries.
+    #[serde(flatten)]
+    pub metadata: ScrollMetadata,
+    /// `true` when the client asked to reset this prop.
+    pub reset: bool,
+}
 
 /// The shape the Inertia JS client expects.
 ///
 /// Field order matches the protocol; serialized as snake/camelCase as required.
 #[derive(Debug, Clone, Serialize)]
+#[non_exhaustive]
 pub struct PageObject {
     /// Component name (e.g. `"Users/Index"`).
     pub component: String,
@@ -23,98 +45,42 @@ pub struct PageObject {
     /// Clear history flag (Inertia v2+).
     #[serde(rename = "clearHistory", skip_serializing_if = "is_false")]
     pub clear_history: bool,
-    /// Keys whose values should merge into the client's existing prop state.
+    /// Top-level keys of the shared props.
+    #[serde(rename = "sharedProps", skip_serializing_if = "Vec::is_empty")]
+    pub shared_props: Vec<String>,
+    /// Prop paths that the client appends to its existing state.
     #[serde(rename = "mergeProps", skip_serializing_if = "Vec::is_empty")]
     pub merge_props: Vec<String>,
-    /// Array paths to prepend when loading an earlier scroll page.
+    /// Prop paths that the client prepends to its existing state.
     #[serde(rename = "prependProps", skip_serializing_if = "Vec::is_empty")]
     pub prepend_props: Vec<String>,
-    /// Item identity paths used to update matching items instead of duplicating them.
+    /// Prop paths that the client deep-merges into its existing state.
+    #[serde(rename = "deepMergeProps", skip_serializing_if = "Vec::is_empty")]
+    pub deep_merge_props: Vec<String>,
+    /// `<propPath>.<keyField>` entries that identify items during a merge.
     #[serde(rename = "matchPropsOn", skip_serializing_if = "Vec::is_empty")]
     pub match_props_on: Vec<String>,
-    /// Pagination metadata consumed by Inertia's InfiniteScroll component.
-    #[serde(rename = "scrollProps", skip_serializing_if = "BTreeMap::is_empty")]
-    pub scroll_props: BTreeMap<String, ScrollMetadata>,
-    /// Keys whose merge state the server is asking the client to reset.
-    #[serde(rename = "resetMergeProps", skip_serializing_if = "Vec::is_empty")]
-    pub reset_merge_props: Vec<String>,
-    /// Client cache key to prop mapping for remembered values.
-    #[serde(rename = "onceProps", skip_serializing_if = "BTreeMap::is_empty")]
-    pub once_props: BTreeMap<String, OncePropMetadata>,
     /// Deferred props grouped by group name (Inertia v2+).
     #[serde(rename = "deferredProps", skip_serializing_if = "BTreeMap::is_empty")]
     pub deferred_props: BTreeMap<String, Vec<String>>,
-}
-
-/// Metadata identifying a value remembered by the Inertia client.
-#[derive(Debug, Clone, Serialize)]
-pub struct OncePropMetadata {
-    /// Name of the prop containing the remembered value.
-    pub prop: String,
-}
-
-/// A numbered page or an opaque cursor for an infinite-scroll prop.
-#[derive(Debug, Clone, Serialize)]
-#[serde(untagged)]
-pub enum ScrollPage {
-    /// A one-based page number.
-    Number(u32),
-    /// An opaque database cursor.
-    Cursor(String),
-}
-
-impl From<u32> for ScrollPage {
-    fn from(value: u32) -> Self {
-        Self::Number(value)
-    }
-}
-
-impl From<String> for ScrollPage {
-    fn from(value: String) -> Self {
-        Self::Cursor(value)
-    }
-}
-
-/// Page boundaries supplied by the application's database paginator.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ScrollMetadata {
-    /// Query-string parameter used to request a page.
-    pub page_name: String,
-    /// Page represented by this response.
-    pub current_page: ScrollPage,
-    /// Previous page, or `None` at the start.
-    pub previous_page: Option<ScrollPage>,
-    /// Next page, or `None` at the end.
-    pub next_page: Option<ScrollPage>,
-    pub(crate) reset: bool,
-    #[serde(skip)]
-    pub(crate) match_on: Option<String>,
-}
-
-impl ScrollMetadata {
-    /// Create metadata using either numbered pages or string cursors.
-    pub fn new<P: Into<ScrollPage>>(
-        page_name: impl Into<String>,
-        current_page: P,
-        previous_page: Option<P>,
-        next_page: Option<P>,
-    ) -> Self {
-        Self {
-            page_name: page_name.into(),
-            current_page: current_page.into(),
-            previous_page: previous_page.map(Into::into),
-            next_page: next_page.map(Into::into),
-            reset: false,
-            match_on: None,
-        }
-    }
-
-    /// Match existing items by this field when merging refreshed scroll data.
-    pub fn match_on(mut self, field: impl Into<String>) -> Self {
-        self.match_on = Some(field.into());
-        self
-    }
+    /// Deferred props that failed to resolve and were rescued.
+    #[serde(rename = "rescuedProps", skip_serializing_if = "Vec::is_empty")]
+    pub rescued_props: Vec<String>,
+    /// Infinite-scroll cursors by prop path.
+    #[serde(rename = "scrollProps", skip_serializing_if = "BTreeMap::is_empty")]
+    pub scroll_props: BTreeMap<String, ScrollEntry>,
+    /// Once props by once key.
+    #[serde(rename = "onceProps", skip_serializing_if = "BTreeMap::is_empty")]
+    pub once_props: BTreeMap<String, OnceEntry>,
+    /// `true` when integers outside the JavaScript safe range are sent as `$bigint` markers.
+    #[serde(rename = "preserveBigIntegers", skip_serializing_if = "is_false")]
+    pub preserve_big_integers: bool,
+    /// Flash data for this request. Not kept in the browser history state.
+    #[serde(skip_serializing_if = "Map::is_empty")]
+    pub flash: Map<String, Value>,
+    /// Keep the URL fragment of the original request across a redirect.
+    #[serde(rename = "preserveFragment", skip_serializing_if = "is_false")]
+    pub preserve_fragment: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -136,13 +102,18 @@ impl PageObject {
             version: version.into(),
             encrypt_history: false,
             clear_history: false,
+            shared_props: Vec::new(),
             merge_props: Vec::new(),
             prepend_props: Vec::new(),
+            deep_merge_props: Vec::new(),
             match_props_on: Vec::new(),
-            scroll_props: BTreeMap::new(),
-            reset_merge_props: Vec::new(),
             deferred_props: BTreeMap::new(),
+            rescued_props: Vec::new(),
+            scroll_props: BTreeMap::new(),
             once_props: BTreeMap::new(),
+            preserve_big_integers: false,
+            flash: Map::new(),
+            preserve_fragment: false,
         }
     }
 }
@@ -178,5 +149,39 @@ mod tests {
         assert_eq!(v["encryptHistory"], true);
         assert_eq!(v["mergeProps"], json!(["notifications"]));
         assert_eq!(v["deferredProps"], json!({"dashboard": ["stats"]}));
+    }
+
+    #[test]
+    fn once_and_scroll_entries_match_the_wire_format() {
+        let mut p = PageObject::new("Home", json!({}), "/", "v1");
+        p.once_props.insert(
+            "plans".into(),
+            OnceEntry {
+                prop: "plans".into(),
+                expires_at: None,
+            },
+        );
+        p.scroll_props.insert(
+            "posts".into(),
+            ScrollEntry {
+                metadata: ScrollMetadata::paged("page", 1, true),
+                reset: false,
+            },
+        );
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(
+            v["onceProps"],
+            json!({"plans": {"prop": "plans", "expiresAt": null}})
+        );
+        assert_eq!(
+            v["scrollProps"],
+            json!({"posts": {
+                "pageName": "page",
+                "previousPage": null,
+                "nextPage": 2,
+                "currentPage": 1,
+                "reset": false
+            }})
+        );
     }
 }

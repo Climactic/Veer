@@ -1,6 +1,6 @@
 [package]
 name = "veer"
-version = "0.1.2"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.88"
 license = "MIT OR Apache-2.0"
@@ -10,6 +10,7 @@ documentation = "https://docs.rs/veer"
 readme = "README.md"
 keywords = ["inertia", "axum", "spa", "react", "vue"]
 categories = ["web-programming", "web-programming::http-server"]
+exclude = [".ai/", ".cargo/", ".github/", "examples/"]
 
 [features]
 default = ["axum"]
@@ -22,7 +23,13 @@ validator = ["dep:validator"]
 garde = ["dep:garde"]
 csrf = ["axum", "dep:cookie", "dep:hmac", "dep:sha2", "dep:base64", "dep:getrandom", "dep:subtle"]
 embed = ["axum"]
+devtools = ["axum"]
 ts = ["dep:ts-rs", "dep:inventory"]
+testing = ["axum"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
@@ -47,13 +54,13 @@ reqwest = { version = "0.13", default-features = false, features = ["json", "rus
 cookie = { version = "0.18", optional = true }
 hmac = { version = "0.13", optional = true }
 sha2 = { version = "0.11", optional = true }
-base64 = { version = "0.22", optional = true }
-getrandom = { version = "0.3", optional = true }
+base64 = { version = "0.23", optional = true }
+getrandom = { version = "0.4", optional = true }
 subtle = { version = "2", optional = true }
 
 tower-sessions = { version = "0.15", optional = true }
 
-validator = { version = "0.20", features = ["derive"], optional = true }
+validator = { version = "0.21", features = ["derive"], optional = true }
 garde = { version = "0.23", features = ["derive", "email"], optional = true }
 
 ts-rs = { version = "11", optional = true }

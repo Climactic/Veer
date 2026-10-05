@@ -16,6 +16,7 @@ pub struct Inertia {
     pub(crate) config: Arc<InertiaConfig>,
     pub(crate) request: Arc<RequestInfo>,
     pub(crate) incoming_flash: Arc<Flash>,
+    pub(crate) previous_url: Option<String>,
 }
 
 impl Inertia {
@@ -29,6 +30,7 @@ impl Inertia {
             config,
             request: Arc::new(request),
             incoming_flash: Arc::new(incoming_flash),
+            previous_url: None,
         }
     }
 
@@ -43,15 +45,20 @@ impl Inertia {
     }
 
     /// Render a component with strongly-typed props.
+    #[track_caller]
     pub fn render<P: Serialize>(&self, component: impl Into<String>, props: P) -> InertiaResponse {
-        let value = match serde_json::to_value(&props) {
-            Ok(v) => v,
-            Err(e) => {
-                tracing::error!(error = %e, "veer: failed to serialize props for render; using null");
-                Value::Null
-            }
-        };
-        InertiaResponse::new(component, value)
+        InertiaResponse::render(component, props)
+    }
+
+    /// Render the page that `props` belongs to. The component name comes from
+    /// [`register_page!`](crate::register_page), so it is written one time.
+    #[cfg(feature = "ts")]
+    #[track_caller]
+    pub fn page<P>(&self, props: P) -> InertiaResponse
+    where
+        P: Serialize + crate::bindings::InertiaPageProps,
+    {
+        InertiaResponse::render(P::COMPONENT, props)
     }
 
     /// Internal redirect (303 on POST/PUT/PATCH/DELETE; 302-equivalent SeeOther on GET).
@@ -66,7 +73,7 @@ impl Inertia {
     /// Typical usage: `inertia.with_errors(errors).redirect("/form")`.
     pub fn with_errors<E: crate::errors::IntoErrorBag>(&self, errors: E) -> InertiaResponse {
         let mut r = InertiaResponse::new(String::new(), serde_json::Value::Null);
-        r.pending_flash.errors.extend(errors.into_error_bag());
+        r.pending_flash.errors.extend(errors.into_all_errors());
         r
     }
 
@@ -77,17 +84,18 @@ impl Inertia {
         r
     }
 
-    /// Redirect to the `Referer` header value, or `/` if absent.
+    /// Redirect to the page that the user came from: the `Referer` header,
+    /// then the session's previous URL (see
+    /// [`InertiaConfig::store_previous_url`]), then `/`.
     ///
     /// Useful for POST-then-redirect-back flows: submit a form, then call
     /// `inertia.back()` to send the user back to the page they came from.
-    /// Without a `Referer` header (e.g. direct navigation) the redirect falls
-    /// back to `/`.
     pub fn back(&self) -> InertiaResponse {
         let to = self
             .request
             .referer
             .clone()
+            .or_else(|| self.previous_url.clone())
             .unwrap_or_else(|| "/".to_string());
         self.redirect(to)
     }

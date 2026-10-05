@@ -77,7 +77,10 @@ impl EmbeddedAssets {
                 .unwrap();
         }
         let path = req.uri().path().trim_start_matches('/');
-        match (self.resolver)(path) {
+        // A resolver can read from the file system (rust-embed does in a debug
+        // build), so a path that goes out of the folder is not passed on.
+        let escapes = path.contains(['\\', '\0', '%']) || path.split('/').any(|s| s == "..");
+        match (!escapes).then(|| (self.resolver)(path)).flatten() {
             Some(bytes) => {
                 // A bad `.mime()` override must not panic the builder; fall
                 // back to octet-stream if it isn't a valid header value.
@@ -99,6 +102,7 @@ impl EmbeddedAssets {
                     .header(header::CONTENT_TYPE, ct)
                     .header(header::CONTENT_LENGTH, len)
                     .header(header::CACHE_CONTROL, "public, max-age=31536000, immutable")
+                    .header(header::X_CONTENT_TYPE_OPTIONS, "nosniff")
                     .body(body)
                     .unwrap()
             }

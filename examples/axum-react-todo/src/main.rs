@@ -1,8 +1,8 @@
 use axum_react_todo::{router, todos::TodoStore};
 use std::net::SocketAddr;
 use veer::{
-    session::cookie::CookieSessionStore, ssr::http::HttpSsrClient, CsrfLayer, InertiaConfig,
-    InertiaLayer, ViteRootView,
+    session::cookie::CookieSessionStore, ssr::http::HttpSsrClient, CsrfLayer, DevTools,
+    InertiaConfig, InertiaLayer, ViteRootView,
 };
 
 #[tokio::main]
@@ -26,16 +26,24 @@ async fn main() {
     //   `ViteManifest::load`).
     let ssr_mode = std::env::var("SSR").is_ok();
 
-    let mut cfg = InertiaConfig::new().version(|| "dev".into()).session(
+    let mut cfg = InertiaConfig::new().version_str("dev").session(
         CookieSessionStore::new(b"01234567890123456789012345678901".to_vec()).secure(false),
     );
+    // Record requests for the Inertia DevTools browser extension (`devtools`
+    // feature). The read API is open, so this is for debug builds only.
+    if cfg!(debug_assertions) {
+        cfg = cfg.devtools(DevTools::new());
+    }
     if ssr_mode {
+        // `VITE_DEV_SERVER` lets you move Vite off :5173 (`bun dev --port 5174`).
+        let vite = std::env::var("VITE_DEV_SERVER")
+            .unwrap_or_else(|_| "http://localhost:5173".to_string());
         cfg = cfg
             .root_view(
                 ViteRootView::dev()
                     .title("veer todo")
                     .entry("frontend/app.tsx")
-                    .dev_server("http://localhost:5173")
+                    .dev_server(vite)
                     .react_refresh(true),
             )
             .ssr(HttpSsrClient::new("http://127.0.0.1:13714/render"))
@@ -47,8 +55,14 @@ async fn main() {
     // CSRF protection (demo secret — load from config/env in production).
     // Stacked outside InertiaLayer so it verifies before the handler runs and
     // issues the XSRF-TOKEN cookie the Inertia/axios client echoes back.
-    let app = router()
-        .build()
+    let app = router().build();
+    // Keep the TypeScript bindings current while you develop. Files are
+    // written only when their content changes.
+    if cfg!(debug_assertions) {
+        let out = concat!(env!("CARGO_MANIFEST_DIR"), "/frontend/gen");
+        veer::bindings::generate_split(out).expect("generate bindings");
+    }
+    let app = app
         .with_state(store)
         .layer(InertiaLayer::new(cfg))
         .layer(CsrfLayer::new(b"01234567890123456789012345678901".to_vec()).secure(false));

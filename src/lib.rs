@@ -3,7 +3,7 @@
 //! Build classic server-rendered apps that drive React, Vue, or Svelte frontends
 //! through the official Inertia.js client adapters — no separate JSON API needed.
 //!
-//! See <https://inertiajs.com/the-protocol> for the protocol spec.
+//! See <https://inertiajs.com/docs/v3/core-concepts/the-protocol> for the protocol spec.
 //!
 //! # Quick start (axum)
 //!
@@ -13,7 +13,6 @@
 //!
 //! # async fn run() {
 //! let config = InertiaConfig::new()
-//!     .version(|| "1".into())
 //!     .root_view(MinimalRootView::new().title("Acme").vite_entry("/src/main.tsx"));
 //!
 //! let app: Router = Router::new()
@@ -30,11 +29,16 @@
 //! |------|---------|---------|
 //! | `axum` | on | Axum extractor + tower layer |
 //! | `ssr` | off | HTTP SSR client backed by `reqwest` |
+//! | `multipart` | off | File upload support (`UploadedFile`, `MultipartStream`) |
 //! | `cookie-session` | off | Signed-cookie session store |
+//! | `tower-sessions` | off | Flash store backed by `tower-sessions` |
 //! | `validator` | off | `IntoErrorBag` impl for `validator::ValidationErrors` |
 //! | `garde` | off | `IntoErrorBag` impl for `garde::Report` |
 //! | `csrf` | off | Inertia/axios-compatible CSRF layer (`CsrfLayer`) |
 //! | `embed` | off | Embedded-asset serving service (`EmbeddedAssets`) |
+//! | `devtools` | off | Recorder + read API for the Inertia DevTools browser extension |
+//! | `ts` | off | TypeScript bindings codegen (`ts-rs` + `inventory`) |
+//! | `testing` | off | Helpers for tests of your handlers ([`testing`]) |
 //!
 //! # Architecture
 //!
@@ -46,19 +50,20 @@
 //!
 //! # Caveats
 //!
-//! - `Always<T>` and `Merge<T>` wrappers are detected at any depth inside a
-//!   typed `Serialize` value, but only top-level matches affect the Inertia
-//!   wire format (the protocol has no notion of "nested merge prop").
-//! - When building props with the `serde_json::json!` macro, wrappers are
-//!   collapsed into raw values before they reach `Inertia::render` — they
-//!   only survive via typed `#[derive(Serialize)]` structs. Use
-//!   [`InertiaResponse::merge`] to mark top-level keys built via `json!`.
+//! - `Always<T>` and `Merge<T>` wrappers are detected at any depth and through
+//!   any serialization path (typed structs, `serde_json::json!`, hand-built
+//!   `Value`s). A nested wrapper acts at its dot path (`posts.data`).
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(missing_docs)]
 #![warn(rust_2018_idioms)]
 
+pub mod bigint;
 pub mod config;
+#[cfg(feature = "devtools")]
+pub mod devtools;
 pub mod error;
 pub mod errors;
+pub mod head;
 pub mod headers;
 pub mod inertia;
 pub mod page;
@@ -94,19 +99,35 @@ pub mod __private {
 pub use config::InertiaConfig;
 #[cfg(feature = "csrf")]
 pub use csrf::CsrfTokens;
+#[cfg(feature = "devtools")]
+pub use devtools::DevTools;
 pub use error::VeerError;
+pub use head::Head;
 pub use inertia::Inertia;
-pub use page::{PageObject, ScrollMetadata, ScrollPage};
-pub use props::{Always, Merge};
+pub use page::PageObject;
+pub use props::{Always, Merge, Prop, ScrollMetadata};
 pub use request::RequestInfo;
 pub use response::InertiaResponse;
-pub use root_view::{MinimalRootView, RootView, RootViewContext, ViteManifest, ViteRootView};
+pub use root_view::{
+    MinimalRootView, RootView, RootViewContext, ViteManifest, ViteManifestError, ViteRootView,
+};
 pub use session::{Flash, SessionStore};
 pub use shared::{SharedProps, SharedPropsData};
 pub use ssr::{SsrClient, SsrPayload};
 
 #[cfg(feature = "axum")]
-pub use adapters::axum::{InertiaForm, InertiaFormRejection, InertiaLayer, Method, Router};
+pub use adapters::axum::{
+    InertiaForm, InertiaFormRejection, InertiaLayer, Method, MissingInertiaLayer, Precognition,
+    Router,
+};
+
+#[cfg(all(feature = "axum", feature = "garde"))]
+pub use adapters::axum::GardeValidated;
+#[cfg(all(feature = "axum", feature = "validator"))]
+pub use adapters::axum::Validated;
+
+#[cfg(feature = "testing")]
+pub mod testing;
 
 #[cfg(feature = "csrf")]
 pub use adapters::axum::CsrfLayer;

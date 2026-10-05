@@ -1,6 +1,5 @@
 //! Shared props: per-config props merged into every response.
 
-use crate::props::closure::{LazyProp, OnceProp};
 use crate::request::RequestInfo;
 use async_trait::async_trait;
 use serde_json::Value;
@@ -11,8 +10,7 @@ use std::sync::Arc;
 /// Shared values and on-demand resolvers, merged underneath page props.
 pub struct SharedPropsData {
     pub(crate) value: Value,
-    pub(crate) once: HashMap<String, OnceProp>,
-    pub(crate) lazies: HashMap<String, LazyProp>,
+    pub(crate) props: HashMap<String, crate::Prop>,
 }
 
 impl SharedPropsData {
@@ -20,55 +18,37 @@ impl SharedPropsData {
     pub fn new(value: Value) -> Self {
         Self {
             value,
-            once: HashMap::new(),
-            lazies: HashMap::new(),
+            props: HashMap::new(),
         }
     }
-
-    /// Remember a prop across visits until the client explicitly requests it again.
+    /// Attach a closure prop using the same semantics as page props.
+    pub fn prop(mut self, key: impl Into<String>, prop: crate::Prop) -> Self {
+        self.props.insert(key.into(), prop);
+        self
+    }
+    /// Remember a shared prop across visits.
     pub fn once<F, Fut>(self, key: impl Into<String>, f: F) -> Self
     where
         F: FnOnce() -> Fut + Send + 'static,
         Fut: Future<Output = Value> + Send + 'static,
     {
-        let key = key.into();
-        self.once_as(key.clone(), key, f)
+        self.prop(key, crate::Prop::new(f).once())
     }
-
-    /// Remember a prop under a custom key, for example one scoped to an organisation.
-    pub fn once_as<F, Fut>(
-        mut self,
-        prop: impl Into<String>,
-        cache_key: impl Into<String>,
-        f: F,
-    ) -> Self
+    /// Remember a shared prop under a scoped cache key.
+    pub fn once_as<F, Fut>(self, key: impl Into<String>, cache_key: impl Into<String>, f: F) -> Self
     where
         F: FnOnce() -> Fut + Send + 'static,
         Fut: Future<Output = Value> + Send + 'static,
     {
-        self.once.insert(
-            prop.into(),
-            OnceProp {
-                key: cache_key.into(),
-                closure: Box::new(|| Box::pin(f())),
-            },
-        );
-        self
+        self.prop(key, crate::Prop::new(f).once_as(cache_key))
     }
-
-    /// Include this value only when explicitly requested by a partial reload.
-    pub fn lazy<F, Fut>(mut self, key: impl Into<String>, f: F) -> Self
+    /// Include a shared prop only when explicitly requested.
+    pub fn lazy<F, Fut>(self, key: impl Into<String>, f: F) -> Self
     where
         F: FnOnce() -> Fut + Send + 'static,
         Fut: Future<Output = Value> + Send + 'static,
     {
-        self.lazies.insert(
-            key.into(),
-            LazyProp {
-                closure: Box::new(|| Box::pin(f())),
-            },
-        );
-        self
+        self.prop(key, crate::Prop::new(f).optional())
     }
 }
 

@@ -1,7 +1,7 @@
 #![cfg(feature = "embed")]
 
 use axum::{body::Body, Router};
-use http::Request;
+use http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use std::borrow::Cow;
 use tower::ServiceExt;
@@ -130,4 +130,24 @@ async fn invalid_mime_override_falls_back_instead_of_panicking() {
         resp.headers().get("content-type").unwrap(),
         "application/octet-stream"
     );
+}
+
+#[tokio::test]
+async fn path_that_leaves_the_folder_is_404_and_not_resolved() {
+    // A resolver that would answer any path, as one that reads files does.
+    let open = EmbeddedAssets::new(|_: &str| Some(Cow::Borrowed(b"secret" as &[u8])));
+    let app = Router::new().nest_service("/build", open);
+    for uri in [
+        "/build/../Cargo.toml",
+        "/build/a/../../b",
+        "/build/%2e%2e/b",
+    ] {
+        let request = Request::get(uri).body(Body::empty()).unwrap();
+        let resp = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND, "{uri}");
+    }
+    let request = Request::get("/build/a/b.js").body(Body::empty()).unwrap();
+    let resp = app.oneshot(request).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(resp.headers()["x-content-type-options"], "nosniff");
 }

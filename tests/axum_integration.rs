@@ -101,7 +101,7 @@ async fn post_redirect_is_303_and_flashes_errors() {
 
     // session now holds the flash
     let g = session.store.lock().await;
-    assert_eq!(g.errors.get("name").unwrap(), "is required");
+    assert_eq!(g.errors["name"], ["is required"]);
 }
 
 #[tokio::test]
@@ -120,9 +120,9 @@ async fn partial_reload_returns_only_requested_lazy() {
     assert_eq!(resp.status(), 200);
     let body = resp.into_body().collect().await.unwrap().to_bytes();
     let page: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    // Partial reload requested only "stats" → base props ("users") + auto-shared
-    // (errors/flash) are stripped by the partial filter; only "stats" remains.
-    assert_eq!(page["props"], json!({"stats": {"hits": 99}}));
+    // Partial reload requested only "stats" → base props ("users") are stripped
+    // by the partial filter; `errors` is an always prop.
+    assert_eq!(page["props"], json!({"stats": {"hits": 99}, "errors": {}}));
 }
 
 #[tokio::test]

@@ -1,11 +1,8 @@
 import { Link, usePage } from "@inertiajs/react";
 import type { ReactNode } from "react";
 
-type Flash = { success?: string };
-
 export default function Layout({ children }: { children: ReactNode }) {
-  const { props } = usePage<{ flash?: Flash }>();
-  const success = props.flash?.success;
+  const success = usePage().flash.success as string | undefined;
 
   return (
     <div className="layout">
@@ -17,6 +14,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           <nav className="layout-nav">
             <Link href="/">home</Link>
             <Link href="/todos">todos</Link>
+            <Link href="/showcase">showcase</Link>
           </nav>
         </div>
       </header>

@@ -13,7 +13,7 @@ pub struct Todo {
 
 #[derive(Deserialize, Validate)]
 pub struct NewTodo {
-    #[validate(length(min = 1, message = "title is required"))]
+    #[validate(length(min = 3, message = "title must have at least 3 characters"))]
     pub title: String,
 }
 
@@ -53,6 +53,48 @@ impl TodoStore {
 #[ts(export)]
 pub struct HomeProps {}
 veer::register_page!(HomeProps, "home");
+
+#[derive(Serialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub struct ShowcaseProps {
+    /// Larger than JavaScript's safe integer range: sent as a `BigInt`.
+    pub order_id: u64,
+}
+
+#[derive(Serialize, TS)]
+#[ts(export)]
+pub struct Stats {
+    pub todos: usize,
+}
+
+#[derive(Serialize, TS)]
+#[ts(export)]
+pub struct FeedItem {
+    pub id: u32,
+    pub title: String,
+}
+
+#[derive(Serialize, TS)]
+#[ts(export)]
+pub struct Feed {
+    pub data: Vec<FeedItem>,
+}
+
+/// The props that the `showcase` handler attaches as closures. This type
+/// gives them TypeScript types; the handler's closures return the same types.
+#[derive(TS)]
+#[ts(export)]
+pub struct ShowcaseClosureProps {
+    /// Once prop.
+    pub plans: Vec<String>,
+    /// Deferred prop: absent on the first render.
+    #[ts(optional)]
+    pub stats: Option<Stats>,
+    /// Infinite-scroll prop.
+    pub feed: Feed,
+}
+veer::register_page!(ShowcaseProps, "showcase", ShowcaseClosureProps);
 
 #[derive(Serialize, TS)]
 #[ts(export)]

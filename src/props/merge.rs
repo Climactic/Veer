@@ -8,10 +8,9 @@ use serde::{Serialize, Serializer};
 /// Detected anywhere in the props tree, through any serialization path
 /// (typed `#[derive(Serialize)]` structs, `serde_json::json!`, hand-built
 /// `Value`s, etc.). The wrapper serializes as a single-key sentinel object
-/// that the Inertia resolver strips before sending to the client. Top-level
-/// wrappers are recorded in `page.mergeProps` per the Inertia protocol;
-/// deeper-nested wrappers are detected and stripped, but the wire format has
-/// no notion of "nested merge prop" so they have no semantic effect today.
+/// that the Inertia resolver strips before sending to the client. The dot
+/// path of each wrapper is recorded in `page.mergeProps`, so a nested wrapper
+/// (`posts.data`) merges at that path.
 ///
 /// [`crate::response::InertiaResponse::merge`] provides the same effect via
 /// builder-style API.
@@ -28,7 +27,7 @@ impl<T> Merge<T> {
 impl<T: Serialize> Serialize for Merge<T> {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         let mut map = s.serialize_map(Some(1))?;
-        map.serialize_entry(super::MERGE_SENTINEL, &self.0)?;
+        map.serialize_entry(&super::sentinels().merge, &self.0)?;
         map.end()
     }
 }

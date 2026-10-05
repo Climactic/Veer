@@ -12,42 +12,20 @@ Build modern single-page apps in React, Vue, or Svelte — without writing a JSO
 [![Latest Version on crates.io](https://img.shields.io/crates/v/veer.svg?style=for-the-badge)](https://crates.io/crates/veer)
 [![GitHub CI Status](https://img.shields.io/github/actions/workflow/status/climactic/veer/ci.yml?branch=main&label=ci&style=for-the-badge)](https://github.com/climactic/veer/actions?query=workflow%3Aci+branch%3Amain)
 [![docs.rs](https://img.shields.io/docsrs/veer?style=for-the-badge)](https://docs.rs/veer)
-[![MSRV 1.85](https://img.shields.io/badge/MSRV-1.85-blue?style=for-the-badge)](https://www.rust-lang.org)
+[![MSRV 1.88](https://img.shields.io/badge/MSRV-1.88-blue?style=for-the-badge)](https://www.rust-lang.org)
 [![Sponsor on GitHub](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?style=for-the-badge&logo=github)](https://github.com/sponsors/climactic)
 [![Support on Ko-fi](https://img.shields.io/badge/Support-Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/ClimacticCo)
 
 </div>
-
-### Infinite scrolling
-
-Return a paginated prop with a `data` array and mark it with scroll metadata:
-
-```rust
-use veer::ScrollMetadata;
-
-inertia.render("Users/Index", serde_json::json!({
-    "users": { "data": users, "total": total }
-})).scroll("users", ScrollMetadata::new("page", page, previous_page, next_page))
-```
-
-Wrap the items in the official `<InfiniteScroll data="users">` client component.
-Use `ScrollMetadata::new(...).match_on("id")` when refreshed pages may contain
-already-loaded items, such as a list that polls for status updates.
-Veer emits `scrollProps` and merges `users.data` in the requested direction.
-Use the client's `reset: ['users']` visit option when changing filters. Reset
-visits are partial reloads, so include any other props that must refresh (such as
-filters, counts, errors, or flash messages) in the visit's `only` option. Database
-filtering, counts, and page boundaries remain the application's responsibility.
 
 ## 📖 Table of Contents
 
 - ✨ [What is Inertia, and why a Rust adapter](#-what-is-inertia-and-why-a-rust-adapter)
 - 📦 [Installation](#-installation)
 - 🚀 [Quick Start](#-quick-start)
-- 🍳 [Cookbook](#-cookbook)
+- 🧭 [A short tour](#-a-short-tour)
+- 📚 [Documentation](#-documentation)
 - 🎛️ [Feature Flags](#️-feature-flags)
-- 🏗️ [Architecture](#️-architecture)
-- ⚠️ [Caveats](#️-caveats)
 - 🧪 [Example App](#-example-app)
 - 🗺️ [Status & Roadmap](#️-status--roadmap)
 - 🙌 [Acknowledgements](#-acknowledgements)
@@ -63,7 +41,7 @@ filtering, counts, and page boundaries remain the application's responsibility.
 
 [Inertia.js](https://inertiajs.com) is a glue layer that lets a classic server-rendered backend drive a modern SPA frontend. The server returns a page object (component name + props); the official Inertia client adapter for React/Vue/Svelte takes care of mounting the component, hydrating props, intercepting links, and making subsequent navigations into JSON XHRs.
 
-`veer` is a clean-room Rust implementation of the server side of the [Inertia v3 protocol](https://inertiajs.com/the-protocol). It targets [axum](https://github.com/tokio-rs/axum) out of the box; the protocol core is framework-agnostic, so adapters for other Rust web frameworks slot in beside it.
+`veer` is a clean-room Rust implementation of the server side of the [Inertia v3 protocol](https://inertiajs.com/docs/v3/core-concepts/the-protocol). It targets [axum](https://github.com/tokio-rs/axum) out of the box; the protocol core is framework-agnostic, so adapters for other Rust web frameworks slot in beside it.
 
 ```text
    ┌─────────────────────────┐                       ┌─────────────────────────┐
@@ -76,23 +54,21 @@ filtering, counts, and page boundaries remain the application's responsibility.
 
 **Highlights**
 
-- 🦀 Pure Rust server-side implementation of Inertia v3
-- ⚡ First-class [axum](https://github.com/tokio-rs/axum) adapter (extractor + tower layer)
-- 🧩 Framework-agnostic protocol core — drop new adapters in beside the axum one
-- 📦 Partial reloads, deferred props, merge props, encrypted/clear history
-- 🖥️ SSR via `@inertiajs/server` (Node or Bun) with graceful fallback
-- ⚙️ Vite dev + production manifest integration that mirrors Laravel's `@vite`
-- 📤 File uploads via typed `InertiaForm` + a streaming `MultipartStream` extractor
-- ✅ Validation flash for `validator` and `garde`, plus a cookie-based session store
-- 🪢 End-to-end TypeScript bindings: typed page props + Ziggy-style route helpers, generated from Rust
+- 🦀 The full Inertia v3 protocol (client 3.8), checked against the Laravel adapter and the real client
+- ⚡ First-class [axum](https://github.com/tokio-rs/axum) adapter: one extractor, one tower layer
+- 📦 Every prop type: partial reloads, deferred, optional, once, merge, infinite scroll, big integers
+- ✅ Forms the Inertia way: validation errors, flash data, error bags, Precognition live validation, file uploads
+- 🖥️ SSR through the official Node/Bun renderer, with fallback to client rendering
+- ⚙️ Vite dev server + production manifest integration, and embedded assets for a single-binary deploy
+- 🪢 End-to-end TypeScript: page props and route helpers generated from your Rust types
+- 🔒 CSRF protection, history encryption, and a recorder for the Inertia DevTools extension
+- 🧩 Framework-agnostic protocol core with pluggable sessions, root views and SSR clients
 
 ## 📦 Installation
 
-Add `veer` to your `Cargo.toml`:
-
 ```toml
 [dependencies]
-veer = "0.1"
+veer = "0.3"
 ```
 
 Or with `cargo add`:
@@ -101,7 +77,7 @@ Or with `cargo add`:
 cargo add veer
 ```
 
-The default feature set includes the axum adapter. See [Feature flags](#️-feature-flags) for everything else.
+The default feature set includes the axum adapter. See [Feature flags](#️-feature-flags) for everything else. Coming from an older version? Read the [upgrade guide](docs/upgrading.md).
 
 ## 🚀 Quick Start
 
@@ -112,7 +88,6 @@ use veer::{Inertia, InertiaConfig, InertiaLayer, MinimalRootView};
 #[tokio::main]
 async fn main() {
     let cfg = InertiaConfig::new()
-        .version(|| "1".into())
         .root_view(
             MinimalRootView::new()
                 .title("Acme")
@@ -130,484 +105,77 @@ async fn main() {
 }
 ```
 
-The `Inertia` extractor reads the request. `render(component, props)` returns a builder. The layer handles the rest of the protocol — initial HTML on first load, JSON on XHR navigations, 409 for asset-version mismatches, 303 for POST-redirects, version checks, partial reloads.
+The `Inertia` extractor reads the request. `render(component, props)` returns a builder. The layer handles the rest of the protocol — initial HTML on first load, JSON on XHR navigations, 409 for asset-version mismatches, 303 for redirects, partial reloads. Continue with the [getting started guide](docs/getting-started.md).
 
-## 🍳 Cookbook
+## 🧭 A short tour
 
-<details>
-<summary><b>Validation + flash, Laravel-style</b></summary>
-
-```rust,ignore
-async fn users_create(
-    inertia: Inertia,
-    InertiaForm(body): InertiaForm<NewUser>,
-) -> impl IntoResponse {
-    if let Err(errors) = body.validate() {
-        return inertia.with_errors(errors).redirect("/users/new");
-    }
-    create_user(body).await;
-    inertia
-        .redirect("/users")
-        .with_flash("success", serde_json::json!("User created"))
-}
-```
-
-`InertiaForm` accepts `application/json`, `application/x-www-form-urlencoded`, and (with the `multipart` feature) `multipart/form-data`. The same handler works regardless of how the Inertia client serialized the request.
-
-On the frontend, `usePage().props.errors` and `usePage().props.flash` are auto-populated whenever a `SessionStore` is configured — no extra wiring.
-
-</details>
-
-<details>
-<summary><b>File uploads</b></summary>
-
-Enable the `multipart` feature and add `UploadedFile` fields to your typed struct:
-
-```rust,ignore
-use veer::{InertiaForm, UploadedFile};
-
-#[derive(serde::Deserialize)]
-struct CreateAvatar {
-    user_id: String,
-    avatar: UploadedFile,
-}
-
-async fn upload_avatar(
-    inertia: Inertia,
-    InertiaForm(form): InertiaForm<CreateAvatar>,
-) -> impl IntoResponse {
-    save_avatar(&form.user_id, &form.avatar.bytes, form.avatar.filename.as_deref()).await;
-    inertia.redirect("/profile").with_flash("success", json!("Avatar updated"))
-}
-```
-
-Inertia's `useForm` automatically switches to `multipart/form-data` when any field is a `File` or `Blob`. The same handler accepts JSON when no file is attached and multipart when one is — no separate route required.
-
-For large or unbounded uploads where in-memory buffering isn't acceptable, use `MultipartStream` instead:
-
-```rust,ignore
-use veer::MultipartStream;
-
-async fn huge_upload(MultipartStream(mut m): MultipartStream) -> impl IntoResponse {
-    while let Some(field) = m.next_field().await.unwrap() {
-        // pipe field.chunk().await into S3, disk, wherever — no buffering
-    }
-    // ...
-}
-```
-
-</details>
-
-<details>
-<summary><b>External redirect (OAuth, billing, etc.)</b></summary>
-
-```rust,ignore
-async fn oauth_start(inertia: Inertia) -> impl IntoResponse {
-    inertia.location("https://accounts.google.com/o/oauth2/v2/auth?...")
-}
-```
-
-Returns 409 + `X-Inertia-Location`. The Inertia client honors this with a hard navigation.
-
-</details>
-
-<details>
-<summary><b>Partial reloads, lazy & deferred props</b></summary>
+**Load data only when the page needs it.** Closures run only when the response needs their value, and they return plain Rust types. → [Props](docs/props.md)
 
 ```rust,ignore
 inertia
-    .render("Users/Index", serde_json::json!({ "users": users }))
-    .lazy("stats", || async { json!({ "hits": load_stats().await }) })
-    .deferred("expensive", "dashboard", || async { json!(load_expensive().await) })
-    .merge("notifications")
+    .render("Users/Index", UsersIndexProps { users })
+    .lazy("stats", || async { load_stats().await })                    // on request only
+    .deferred("activity", "default", || async { load_activity().await }) // after first render
+    .once("plans", || async { load_plans().await })                    // one time per client
+    .prop("feed", Prop::scroll(move || async move { load_feed(page).await })) // infinite scroll
 ```
 
-| Method | Behavior |
-|---|---|
-| `lazy(key, closure)` (alias `optional`) | Closure only runs when the client requests this key via a partial reload |
-| `deferred(key, group, closure)` | First response advertises the key under `deferredProps[group]`; client then issues a follow-up reload that resolves it |
-| `merge(key)` | Marks the key so the client merges the value into existing state instead of replacing |
-| `encrypt_history()` / `clear_history()` | Set the Inertia v2+ history-state primitives |
-| `no_ssr()` | Skip SSR for this response only |
-
-</details>
-
-<details>
-<summary><b>Shared props (auth, app name, feature flags)</b></summary>
+**Handle a form like a classic server app.** Validate, redirect, and the errors and the flash message show on the next page. → [Forms and validation](docs/forms-and-validation.md)
 
 ```rust,ignore
-use veer::shared::shared_props_fn;
-
-let app_context = app_context.clone();
-let cfg = InertiaConfig::new()
-    .shared(shared_props_fn(move |req| {
-        let app_context = app_context.clone();
-        let session = req.extension::<tower_sessions::Session>().cloned();
-        async move {
-            let user = match session {
-                Some(session) => current_user(&app_context, &session).await,
-                None => None,
-            };
-            serde_json::json!({
-                "auth": { "user": user },
-                "app": { "name": "Acme" },
-            })
-        }
-    }));
+async fn users_store(inertia: Inertia, Validated(body): Validated<NewUser>) -> impl IntoResponse {
+    // Invalid input went back to the form with its errors already.
+    create_user(body).await;
+    inertia.redirect("/users").with_flash("success", "User created")
+}
 ```
 
-Shared props merge under per-response props (handler props win on key collision).
-Request extensions installed by outer middleware, including a
-`tower_sessions::Session`, are available through `RequestInfo::extension`.
-
-Return `SharedPropsData` to attach shared props that are loaded only on demand:
+**Share data with every page.** → [Shared props](docs/props.md#shared-props)
 
 ```rust,ignore
-use veer::SharedPropsData;
-
-SharedPropsData::new(serde_json::json!({ "unread_count": unread_count }))
-    .lazy("notifications", move || async move {
-        serde_json::json!(load_notifications(&client).await)
-    })
+let cfg = InertiaConfig::new().share(|req| {
+    let user = req.extension::<CurrentUser>().cloned(); // set by your auth middleware
+    async move { json!({ "auth": { "user": user } }) }
+});
 ```
 
-The lazy closure runs only when a matching partial reload explicitly requests
-its key. Initial visits and unrelated reloads do not execute it. Page values
-and page lazy/deferred props take precedence over shared lazy props.
-
-</details>
-
-<details>
-<summary><b>SSR via @inertiajs/server (Node or Bun)</b></summary>
-
-Enable the `ssr` feature and point at the SSR service:
+**Get TypeScript types from your Rust structs.** → [TypeScript bindings](docs/typescript.md)
 
 ```rust,ignore
-use veer::ssr::http::HttpSsrClient;
-
-let cfg = InertiaConfig::new()
-    .ssr(HttpSsrClient::new("http://127.0.0.1:13714/render"));
-```
-
-SSR failures fall back to client-side rendering by default. Set `ssr_required(true)` for hard-fail behavior.
-
-For end-to-end SSR you'll usually combine this with `ViteRootView` (next entry) — `ViteRootView` inlines the SSR body verbatim and emits the `<script data-page>` mount the Inertia v3 client expects.
-
-</details>
-
-<details>
-<summary><b>Vite integration (dev + production)</b></summary>
-
-`ViteRootView` is a drop-in `RootView` that mirrors what Laravel's `@vite` + `@viteReactRefresh` Blade directives do. Two modes:
-
-**Dev** — cross-origin script tags pointing at the Vite dev server, plus (opt-in) the React refresh preamble required when the HTML shell is served off-origin:
-
-```rust,ignore
-use veer::ViteRootView;
-
-let cfg = InertiaConfig::new()
-    .root_view(
-        ViteRootView::dev()
-            .title("Acme")
-            .entry("frontend/app.tsx")
-            .dev_server("http://localhost:5173")
-            .react_refresh(true), // needed for @vitejs/plugin-react cross-origin
-    );
-```
-
-**Production** — `vite build` writes `dist/.vite/manifest.json`. `ViteRootView::production` walks it from the entry, emitting the entry script, its CSS, and `<link rel="modulepreload">` hints for transitively imported chunks:
-
-```rust,ignore
-use veer::{ViteManifest, ViteRootView};
-
-let manifest = ViteManifest::load("dist/.vite/manifest.json")?;
-let version  = manifest.hash(); // changes whenever any chunk hash changes
-
-let cfg = InertiaConfig::new()
-    .version(move || version.clone().into()) // bumps client asset cache on rebuild
-    .root_view(
-        ViteRootView::production()
-            .title("Acme")
-            .entry("frontend/app.tsx")
-            .manifest(manifest)
-            .asset_base("/build"),
-    );
-
-// Serve the built bundle next to the routes:
-// .nest_service("/build", tower_http::services::ServeDir::new("dist"))
-```
-
-Wiring `version` to `manifest.hash()` means any rebuild auto-invalidates clients via the Inertia 409 + force-reload protocol — no manual version bumps.
-
-For SSR in production, build the sidecar with `vite build --ssr frontend/ssr.tsx` and run the resulting bundle (`bun dist/ssr/ssr.js` or `node …`). Same `:13714/render` interface as dev.
-
-</details>
-
-<details>
-<summary><b>CSRF protection (Inertia/axios)</b></summary>
-
-The Inertia client uses axios, which reads an `XSRF-TOKEN` cookie and echoes it
-back in an `X-XSRF-TOKEN` header on every mutating request — no frontend code
-needed. `CsrfLayer` is the server side of that convention: it issues the cookie
-and verifies the header using a stateless, HMAC-signed double-submit token (no
-server-side session required).
-
-Enable the `csrf` feature and stack the layer next to `InertiaLayer`:
-
-```toml
-veer = { version = "0.1", features = ["csrf"] }
-```
-
-```rust,ignore
-use veer::{CsrfLayer, InertiaLayer};
-
-let app = router()
-    .with_state(state)
-    .layer(InertiaLayer::new(cfg))
-    .layer(CsrfLayer::new(secret));   // 32-byte secret; outermost layer
-```
-
-On a token mismatch the layer short-circuits with `419` (the Laravel/Inertia
-convention for an expired token) before the handler runs. Safe methods
-(GET/HEAD/OPTIONS/TRACE) are never checked. For endpoints that can't carry the
-header (third-party webhooks), exclude them:
-
-```rust,ignore
-CsrfLayer::new(secret).exclude("/webhooks")
-```
-
-The cookie is JS-readable by design (so axios can echo it); it is `Secure` +
-`SameSite=Lax` by default — call `.secure(false)` for local HTTP dev.
-
-</details>
-
-<details>
-<summary><b>Embedded assets (single-binary deploy)</b></summary>
-
-For a single self-contained binary, embed the built frontend instead of serving
-it from disk. The manifest embeds via `include_str!`; `EmbeddedAssets` serves the
-bytes. Enable the `embed` feature:
-
-```toml
-veer = { version = "0.1", features = ["embed"] }
-rust-embed = "8"
-```
-
-```rust,ignore
-use rust_embed::RustEmbed;
-use veer::{EmbeddedAssets, ViteManifest, ViteRootView};
-
-#[derive(RustEmbed)]
-#[folder = "dist/"]
-struct Assets;
-
-let manifest: ViteManifest = include_str!("../dist/.vite/manifest.json").parse()?;
-let version  = manifest.hash();
-
-let cfg = InertiaConfig::new()
-    .version(move || version.clone().into())
-    .root_view(ViteRootView::production().entry("frontend/app.tsx").manifest(manifest));
-
-let app = router()
-    .with_state(state)
-    .layer(InertiaLayer::new(cfg))
-    // Replaces `.nest_service("/build", ServeDir::new("dist"))`:
-    .nest_service("/build", EmbeddedAssets::new(|p| Assets::get(p).map(|f| f.data)));
-```
-
-`EmbeddedAssets` takes any `Fn(&str) -> Option<Cow<'static, [u8]>>`, so it works
-with `rust-embed`, `include_dir`, or a plain map — Veer depends on none of them.
-It sets `Content-Type` from the file extension and serves content-hashed assets
-with `Cache-Control: public, max-age=31536000, immutable`.
-
-</details>
-
-<details>
-<summary><b>End-to-end TypeScript bindings (Wayfinder-style)</b></summary>
-
-Enable the `ts` feature and the frontend gets an auto-generated `gen/` directory containing every page's props type, a discriminated `Pages` union, and one TypeScript module per controller with method-aware URL builders.
-
-```toml
-[dependencies]
-veer = { version = "0.1", features = ["ts"] }
-ts-rs = "10"
-```
-
-Annotate each prop struct and register it as a page:
-
-```rust,ignore
-use serde::Serialize;
-use ts_rs::TS;
-
 #[derive(Serialize, TS)]
 #[ts(export)]
-#[serde(rename_all = "camelCase")]
-pub struct UsersIndexProps {
-    pub users: Vec<User>,
-}
+pub struct UsersIndexProps { pub users: Vec<User> }
 veer::register_page!(UsersIndexProps, "Users/Index");
+
+// The component name comes from the registration.
+inertia.page(UsersIndexProps { users })
 ```
 
-Register action payloads or other standalone frontend contracts separately:
-
-```rust,ignore
-#[derive(serde::Deserialize, ts_rs::TS)]
-struct UpdateProfileForm {
-    display_name: String,
-}
-
-veer::register_type!(UpdateProfileForm);
-```
-
-Then build your router using `veer::Router` — same fluent API as `axum::Router`, but every route gets a name and method so the codegen knows about it:
-
-```rust,ignore
-use veer::Method::*;
-
-pub fn router() -> veer::Router<AppState> {
-    veer::Router::new()
-        .named_route(GET,    "users.index",   "/users",      users_index)
-        .named_route(GET,    "users.show",    "/users/:id",  users_show)
-        .named_route(GET,    "users.create",  "/users/new",  users_create)
-        .named_route(POST,   "users.store",   "/users",      users_store)
-        .named_route(PATCH,  "users.update",  "/users/:id",  users_update)
-        .named_route(DELETE, "users.destroy", "/users/:id",  users_destroy)
-}
-
-// In main():
-let app = router().build().with_state(state).layer(InertiaLayer::new(cfg));
-```
-
-`build()` returns a regular `axum::Router`, so `.with_state` / `.layer` / `.merge` / anything else just works. Same-path multi-method calls (GET + POST on `/users`) are merged into a single `MethodRouter` automatically — no panic on duplicate paths.
-
-`ts-rs` mirrors `#[serde(rename_all)]` into the generated TypeScript, so the same struct drives both wire format and type. Route names follow the Laravel resource convention (`index`/`show`/`create`/`store`/`update`/`destroy`) so they don't collide with JavaScript reserved words.
-
-Add a tiny binary that builds the router (so the runtime route registry populates) and then emits the bundle. Drop this in `src/bin/gen-bindings.rs` inside your app crate — `cargo` auto-discovers it:
-
-```rust,ignore
-// src/bin/gen-bindings.rs
-fn main() {
-    let _ = my_app::router().build();   // populate registry
-    veer::bindings::generate_split("./frontend/gen").unwrap();
-}
-```
-
-Generate with:
-
-```bash
-cargo run --bin gen-bindings
-```
-
-The codegen has to run inside *your* app binary (not a standalone CLI), because the route registry is populated at runtime by `Router::build()` and the page registrations are link-time `inventory` submissions — both only exist in your compiled crate.
-
-On the frontend, import types and the per-controller action module:
-
-```tsx,ignore
-import { usePage, router, Link } from "@inertiajs/react";
+```tsx
 import { users, type UsersIndexProps } from "./gen";
 
-export default function Index() {
-  const { props } = usePage<UsersIndexProps>();
-  return (
-    <>
-      <Link href={users.create.url()}>New user</Link>
-      {props.users.map((u) => (
-        <Link key={u.id} href={users.show.url({ id: u.id })}>{u.name}</Link>
-      ))}
-    </>
-  );
-}
+<Link href={users.show.url({ id: user.id })}>{user.name}</Link>
 ```
 
-Each action is a callable with `.url` and `.form` helpers:
+## 📚 Documentation
 
-| Call | Returns |
+| Guide | What it covers |
 |---|---|
-| `users.show({id: 1})` | `{ url: "/users/1", method: "get" } as const` (visit definition) |
-| `users.show.url({id: 1})` | `"/users/1"` (just the path string) |
-| `users.show.form({id: 1})` | `{ action: "/users/1", method: "get" } as const` (props for `<form>`) |
+| [Getting started](docs/getting-started.md) | Install, first page, how a request flows, the frontend entry point |
+| [Props](docs/props.md) | Partial reloads, lazy / deferred / once props, merging, infinite scroll, shared props, big integers |
+| [Forms and validation](docs/forms-and-validation.md) | `Validated`, `InertiaForm`, validation errors, error bags, flash data, Precognition, file uploads |
+| [Redirects and history](docs/redirects-and-history.md) | `redirect`, `back`, external redirects, URL fragments, history encryption |
+| [Sessions](docs/sessions.md) | The cookie store, `tower-sessions`, writing your own store |
+| [Error pages](docs/error-pages.md) | `404` and application errors as Inertia pages |
+| [Testing](docs/testing.md) | `veer::testing`: page assertions for your handlers |
+| [Vite, SSR and assets](docs/vite-ssr-assets.md) | `ViteRootView`, server-side rendering, embedded assets, `<head>` elements |
+| [TypeScript bindings](docs/typescript.md) | Typed page props and route helpers generated from Rust |
+| [CSRF protection](docs/csrf.md) | `CsrfLayer` and the `XSRF-TOKEN` convention |
+| [DevTools](docs/devtools.md) | The recorder for the Inertia DevTools browser extension |
+| [Architecture](docs/architecture.md) | Crate layout, protocol coverage, extension points |
+| [Upgrading](docs/upgrading.md) | Every breaking change of each version and what to do |
 
-Generated layout:
-
-```text
-frontend/gen/
-  index.ts              protocol types, Pages, prop types, action namespace re-exports
-  actions/
-    users.ts            export const index, show, create, store, update, destroy
-    posts.ts            …
-    _root.ts            routes without a dotted prefix
-```
-
-`Always<T>` and `Merge<T>` collapse to `T` on the TypeScript side — the protocol's `mergeProps` / `deferredProps` arrays in the envelope carry the marker information instead.
-
-**Customize the output layout** with the `Split` builder — rename the `actions/` subdirectory, add a filename prefix/suffix, or flatten everything into the root:
-
-```rust,ignore
-veer::bindings::Split::new("./frontend/gen")
-    .actions_dir("controllers")    // -> frontend/gen/controllers/
-    .file_suffix("-controller")    // -> users-controller.ts, posts-controller.ts
-    .generate()?;
-```
-
-`actions_dir("")` writes the controller files directly alongside `index.ts`; `file_prefix` is similarly available.
-
-**Need a single bundled file** instead of the split tree? Use [`bindings::generate("./frontend/inertia.gen.ts")`](https://docs.rs/veer/latest/veer/bindings/fn.generate.html) — same content, one file, with the route tree exposed as a nested `routes.users.show(...)` namespace.
-
-**Auto-regenerate on commit** with [lefthook](https://github.com/evilmartians/lefthook). Add this to `lefthook.yml` at the repo root:
-
-```yaml
-pre-commit:
-  commands:
-    veer-bindings:
-      glob: "*.rs"
-      run: cargo run -q --bin gen-bindings
-      stage_fixed: true
-```
-
-`stage_fixed: true` re-adds the regenerated TS files to the commit so they never drift from the Rust source. Run `lefthook install` once per dev machine. Pair with a CI job that runs `cargo run --bin gen-bindings && git diff --exit-code` on PRs to fail-fast if someone bypasses the hook.
-
-</details>
-
-<details>
-<summary><b>Cookie-based flash session</b></summary>
-
-For apps without an existing session crate:
-
-```rust,ignore
-use veer::session::cookie::CookieSessionStore;
-
-let cfg = InertiaConfig::new()
-    .session(CookieSessionStore::new(env_secret()).secure(true));
-```
-
-HMAC-SHA256-signed, constant-time verification, one-shot semantics. For anything more elaborate, implement the `SessionStore` trait over your existing session crate (`axum-login`, redis, …) in ~30 lines.
-
-</details>
-
-<details>
-<summary><b>tower-sessions integration</b></summary>
-
-If the app already runs `tower-sessions`, enable the `tower-sessions` feature and plug `TowerSessionStore` into the config. Flash data round-trips through whatever backend (Redis, Postgres, in-memory, …) tower-sessions is configured with.
-
-```rust,ignore
-use time::Duration;
-use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer};
-use veer::{session::tower::TowerSessionStore, InertiaConfig, InertiaLayer};
-
-let session_layer = SessionManagerLayer::new(MemoryStore::default())
-    .with_expiry(Expiry::OnInactivity(Duration::minutes(30)));
-
-let cfg = InertiaConfig::new().session(TowerSessionStore::new());
-
-let app = axum::Router::new()
-    // … routes …
-    .layer(InertiaLayer::new(cfg))
-    .layer(session_layer); // tower-sessions must wrap *outside* InertiaLayer
-```
-
-Flash is stored under a single key (`_veer_flash` by default; override with `TowerSessionStore::new().key("...")`).
-
-</details>
+API reference: [docs.rs/veer](https://docs.rs/veer). For the client side, use the [Inertia documentation](https://inertiajs.com/docs/v3).
 
 ## 🎛️ Feature Flags
 
@@ -616,72 +184,31 @@ Flash is stored under a single key (`_veer_flash` by default; override with `Tow
 | `axum` | **on** | Axum extractor + tower layer + `InertiaForm` body extractor |
 | `multipart` | off | File upload support (`UploadedFile`, `MultipartStream`) |
 | `ssr` | off | HTTP SSR client (`reqwest`) |
-| `cookie-session` | off | Signed-cookie one-shot flash store |
-| `tower-sessions` | off | Flash store backed by [`tower-sessions`](https://crates.io/crates/tower-sessions) |
-| `validator` | off | `IntoErrorBag` impl for `validator::ValidationErrors` |
-| `garde` | off | `IntoErrorBag` impl for `garde::Report` |
-| `csrf` | off | Inertia/axios-compatible CSRF protection (`CsrfLayer`) |
+| `cookie-session` | off | Signed-cookie session store |
+| `tower-sessions` | off | Session store backed by [`tower-sessions`](https://crates.io/crates/tower-sessions) |
+| `validator` | off | `Validated<T>` extractor + `IntoErrorBag` impl for `validator::ValidationErrors` |
+| `garde` | off | `GardeValidated<T>` extractor + `IntoErrorBag` impl for `garde::Report` |
+| `csrf` | off | CSRF protection (`CsrfLayer`) |
 | `embed` | off | Embedded-asset serving for single-binary deploys (`EmbeddedAssets`) |
+| `devtools` | off | Recorder + read API for the Inertia DevTools browser extension |
 | `ts` | off | End-to-end TypeScript bindings codegen (`ts-rs` + `inventory`) |
+| `testing` | off | Test helpers (`veer::testing`) |
 
 Disabling a feature drops its transitive deps entirely.
 
-## 🏗️ Architecture
-
-```text
-┌────────────────────────────────────────────────────────┐
-│  axum Router                                           │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │ InertiaLayer                                     │  │
-│  │   ├─ reads flash from SessionStore               │  │
-│  │   ├─ injects config into request extensions      │  │
-│  │   └─ on response: finalizes InertiaResponse,     │  │
-│  │      writes flash, rewrites 302→303 on non-GET   │  │
-│  └──────────────────────────────────────────────────┘  │
-│                       │                                │
-│                       ▼                                │
-│        ┌───────────────────────────┐                   │
-│        │  Inertia (extractor)      │                   │
-│        │  inertia.render(...) →    │                   │
-│        │  InertiaResponse builder  │                   │
-│        └───────────────────────────┘                   │
-└────────────────────────────────────────────────────────┘
-              │
-              ▼
-   ┌──────────────────────────────────────┐
-   │  Protocol core (framework-agnostic)  │
-   │  • RequestInfo / PageObject          │
-   │  • decide() state machine            │
-   │  • prop resolver (partial reloads,   │
-   │    deferred groups, merge keys)      │
-   │  • Pluggable: RootView, SessionStore,│
-   │    SsrClient, SharedProps            │
-   └──────────────────────────────────────┘
-```
-
-The protocol core has zero I/O and zero framework deps — pure data structures and decision functions, exhaustively unit-tested. Adapters for other Rust frameworks (actix, rocket, salvo) can sit beside the axum one without touching it.
-
-## ⚠️ Caveats
-
-> `Always<T>` and `Merge<T>` are detected at any depth and through any serialization path — typed `#[derive(Serialize)]` structs, `serde_json::json!`, hand-built `Value`s, mixed maps. Only top-level matches affect the Inertia wire format though, because the protocol has no notion of a "nested merge prop". Wrappers placed deeper are still stripped from the JSON sent to the client; they just don't appear in `mergeProps`.
-
 ## 🧪 Example App
 
-A complete end-to-end demo lives at [`examples/axum-react-todo/`](examples/axum-react-todo) — axum backend + React/Vite frontend, with validation, flash messages, and an in-memory todo store.
+A complete end-to-end demo lives at [`examples/axum-react-todo/`](examples/axum-react-todo) — axum backend + React/Vite frontend, in CSR and SSR mode. It has a todo list with validation, flash messages and Precognition, and a showcase page for once, deferred, rescued, scroll and big-integer props with generated TypeScript types.
 
 ```bash
-# Terminal 1 — Rust backend
-cargo run -p axum-react-todo
-
-# Terminal 2 — Vite dev server
 cd examples/axum-react-todo
-bun install
-bun dev
+just              # CSR mode — open http://localhost:5173
+SSR=1 just dev    # SSR mode — open http://localhost:3000
 ```
 
 ## 🗺️ Status & Roadmap
 
-`veer` is pre-1.0. The v0.1 protocol surface is complete (all Inertia v3 features: partial reloads, deferred props, merge props, encrypted/clear history, SSR, asset versioning, validation flash). Planned for follow-ups:
+`veer` is pre-1.0. The protocol surface follows Inertia v3 as of client 3.8 / `inertia-laravel` 3.5; the [coverage table](docs/architecture.md#protocol-coverage) has the detail. Planned:
 
 - Adapters for `actix-web` and `rocket`
 - Typed route-param inference (today: `string | number`; goal: read each handler's `Path` extractor and emit the matching TS type)
@@ -704,7 +231,7 @@ Please see [CHANGELOG](CHANGELOG.md) for more information on what has changed re
 
 ## 🤝 Contributing
 
-Please see [CONTRIBUTING](CONTRIBUTING.md) for details.
+Issues and pull requests are welcome.
 You can also join our Discord server to discuss ideas and get help: [Discord Invite](http://go.climactic.co/discord).
 
 ## 🔒 Security Vulnerabilities

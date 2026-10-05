@@ -5,7 +5,9 @@ import Layout from "../../components/Layout";
 import { todos } from "../../gen";
 
 export default function Create() {
-  const form = useForm({ title: "" });
+  // The (method, url, data) form enables Precognition: `validate` asks the
+  // server to check a field without running the action.
+  const form = useForm("post", todos.store.url(), { title: "" });
 
   return (
     <Layout>
@@ -13,7 +15,7 @@ export default function Create() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          form.post(todos.store.url());
+          form.submit();
         }}
       >
         <Field
@@ -22,6 +24,7 @@ export default function Create() {
           autoFocus
           value={form.data.title}
           onChange={(e) => form.setData("title", e.target.value)}
+          onBlur={() => form.validate("title")}
           error={form.errors.title}
         />
         <div className="actions">
